@@ -5,6 +5,8 @@ using Autodesk.AutoCAD.Runtime;
 using C3DTools.Helpers;
 using NetTopologySuite.Geometries;
 using System.Collections.Generic;
+using System.Linq;
+using System.Text;
 
 namespace C3DTools.Commands
 {
@@ -12,7 +14,7 @@ namespace C3DTools.Commands
     {
         private const string AppName = "C3DTools_ID";
 
-        [CommandMethod("HATCHOVERLAP")]
+        [CommandMethod("HATCHOVERLAPANALYSIS")]
         public void HatchOverlap()
         {
             Document doc = Application.DocumentManager.MdiActiveDocument;
@@ -54,17 +56,15 @@ namespace C3DTools.Commands
             ObjectId[] hatchIds = psr.Value.GetObjectIds();
 
             // Step 3: Convert polylines and hatches to NTS geometries
+            var polylineOrder = new List<string>();
             var polylineGeoms = new Dictionary<string, Geometry>();
-            var hatchGeoms = new List<Geometry>();
+            var hatchGeoms = new List<(Geometry Geom, string Layer)>();
 
             using (Transaction tr = db.TransactionManager.StartTransaction())
             {
-                // Convert polylines
                 foreach (ObjectId oid in polylineIds)
                 {
                     Polyline pline = tr.GetObject(oid, OpenMode.ForRead) as Polyline;
-
-                    // Get ID from XData
                     string id = GetPolylineId(pline);
 
                     if (string.IsNullOrEmpty(id))
@@ -76,6 +76,8 @@ namespace C3DTools.Commands
                     Geometry geom = GeometryConverter.PolylineToNts(pline);
                     if (geom != null && geom.IsValid)
                     {
+                        if (!polylineGeoms.ContainsKey(id))
+                            polylineOrder.Add(id);
                         polylineGeoms[id] = geom;
                     }
                     else
@@ -84,54 +86,119 @@ namespace C3DTools.Commands
                     }
                 }
 
-                // Convert hatches
                 foreach (ObjectId oid in hatchIds)
                 {
                     Hatch hatch = tr.GetObject(oid, OpenMode.ForRead) as Hatch;
+                    string layer = hatch.Layer ?? "0";
 
                     Geometry geom = GeometryConverter.HatchToNts(hatch);
                     if (geom != null && geom.IsValid)
-                    {
-                        hatchGeoms.Add(geom);
-                    }
+                        hatchGeoms.Add((geom, layer));
                     else
-                    {
-                        ed.WriteMessage($"\nWarning: Hatch {oid.Handle} has invalid geometry. Skipping.");
-                    }
+                        ed.WriteMessage($"\nWarning: Hatch {oid.Handle} (layer: {layer}) has invalid geometry. Skipping.");
                 }
 
                 tr.Commit();
             }
 
-            // Step 4: Compute overlap areas
-            ed.WriteMessage("\n--- Overlap Analysis Results ---");
+            // Step 4: Compute overlap areas grouped by layer
+            var results = new Dictionary<string, Dictionary<string, double>>();
+            foreach (string id in polylineOrder)
+                results[id] = new Dictionary<string, double>();
 
-            foreach (var kvp in polylineGeoms)
+            var allLayers = new List<string>();
+
+            foreach (var (hatchGeom, layer) in hatchGeoms)
             {
-                string polylineId = kvp.Key;
-                Geometry polylineGeom = kvp.Value;
+                if (!allLayers.Contains(layer))
+                    allLayers.Add(layer);
 
-                ed.WriteMessage($"\nPolyline ID: {polylineId}");
-
-                for (int i = 0; i < hatchGeoms.Count; i++)
+                foreach (string id in polylineOrder)
                 {
-                    Geometry hatchGeom = hatchGeoms[i];
-
-                    Geometry intersection = polylineGeom.Intersection(hatchGeom);
-
-                    if (intersection != null && !intersection.IsEmpty)
+                    Geometry intersection = polylineGeoms[id].Intersection(hatchGeom);
+                    if (intersection != null && !intersection.IsEmpty && intersection.Area > 0)
                     {
-                        double area = intersection.Area;
-                        ed.WriteMessage($"\n  Hatch {i + 1}: Overlap Area = {area:F4}");
-                    }
-                    else
-                    {
-                        ed.WriteMessage($"\n  Hatch {i + 1}: No overlap");
+                        if (!results[id].ContainsKey(layer))
+                            results[id][layer] = 0;
+                        results[id][layer] += intersection.Area;
                     }
                 }
             }
 
-            ed.WriteMessage("\n--- End of Analysis ---");
+            allLayers.Sort();
+
+            const string areaFmt = "F4";
+
+            // Pre-calculate row totals
+            var rowTotals = new Dictionary<string, double>();
+            foreach (string id in polylineOrder)
+            {
+                double total = 0;
+                foreach (string layer in allLayers)
+                    if (results[id].TryGetValue(layer, out double a))
+                        total += a;
+                rowTotals[id] = total;
+            }
+
+            var allColumns = new List<string>(allLayers) { "Total" };
+
+            // Column widths for aligned monospace display
+            int idWidth = polylineOrder.Concat(new[] { "id" }).Max(s => s.Length);
+            var colWidths = new Dictionary<string, int>();
+            foreach (string col in allColumns)
+                colWidths[col] = col.Length;
+            foreach (string id in polylineOrder)
+            {
+                foreach (string layer in allLayers)
+                    if (results[id].TryGetValue(layer, out double a))
+                        colWidths[layer] = System.Math.Max(colWidths[layer], a.ToString(areaFmt).Length);
+                colWidths["Total"] = System.Math.Max(colWidths["Total"], rowTotals[id].ToString(areaFmt).Length);
+            }
+
+            // Space-padded display text
+            var displaySb = new StringBuilder();
+            displaySb.Append("id".PadRight(idWidth));
+            foreach (string col in allColumns)
+                displaySb.Append("  " + col.PadLeft(colWidths[col]));
+            displaySb.AppendLine();
+            displaySb.Append(new string('-', idWidth));
+            foreach (string col in allColumns)
+                displaySb.Append("  " + new string('-', colWidths[col]));
+            displaySb.AppendLine();
+            foreach (string id in polylineOrder)
+            {
+                displaySb.Append(id.PadRight(idWidth));
+                foreach (string layer in allLayers)
+                {
+                    string cell = results[id].TryGetValue(layer, out double a) ? a.ToString(areaFmt) : "";
+                    displaySb.Append("  " + cell.PadLeft(colWidths[layer]));
+                }
+                displaySb.Append("  " + rowTotals[id].ToString(areaFmt).PadLeft(colWidths["Total"]));
+                displaySb.AppendLine();
+            }
+
+            // Tab-separated clipboard text
+            var clipSb = new StringBuilder();
+            clipSb.Append("id");
+            foreach (string col in allColumns) { clipSb.Append("\t"); clipSb.Append(col); }
+            clipSb.AppendLine();
+            foreach (string id in polylineOrder)
+            {
+                clipSb.Append(id);
+                foreach (string layer in allLayers)
+                {
+                    clipSb.Append("\t");
+                    if (results[id].TryGetValue(layer, out double ea))
+                        clipSb.Append(ea.ToString(areaFmt));
+                }
+                clipSb.Append("\t");
+                clipSb.Append(rowTotals[id].ToString(areaFmt));
+                clipSb.AppendLine();
+            }
+
+            // Step 5: Show results dialog
+            var form = new C3DTools.UI.HatchOverlapResultForm(displaySb.ToString(), clipSb.ToString());
+            Application.ShowModalDialog(form);
         }
 
         /// <summary>
