@@ -8,10 +8,10 @@ using C3DTools.Helpers;
 
 namespace C3DTools.Commands
 {
-    public class FixGeometryCommand
+    public class FixPolylineCommand
     {
-        [CommandMethod("FIXGEOM")]
-        public void FixGeometry()
+        [CommandMethod("FIXPLINE")]
+        public void FixPolyline()
         {
             var doc = Application.DocumentManager.MdiActiveDocument;
             var db = doc.Database;
@@ -77,7 +77,7 @@ namespace C3DTools.Commands
                 tr.Commit();
             }
 
-            ed.WriteMessage($"\nFIXGEOM complete: {fixedCount} fixed, {skippedCount} skipped.");
+            ed.WriteMessage($"\nFIXPLINE complete: {fixedCount} fixed, {skippedCount} skipped.");
             if (multiCount > 0)
                 ed.WriteMessage($"\n  {multiCount} geometries split into multiple polylines.");
         }
