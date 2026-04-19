@@ -93,9 +93,40 @@ namespace C3DTools.Commands
 
                     Geometry geom = GeometryConverter.HatchToNts(hatch);
                     if (geom != null && geom.IsValid)
+                    {
                         hatchGeoms.Add((geom, layer));
+                    }
                     else
-                        ed.WriteMessage($"\nWarning: Hatch {oid.Handle} (layer: {layer}) has invalid geometry. Skipping.");
+                    {
+                        ed.WriteMessage($"\nWarning: Hatch {oid.Handle} (layer: {layer}) has invalid geometry.");
+
+                        PromptKeywordOptions pko = new PromptKeywordOptions(
+                            $"\nFix hatch {oid.Handle} (layer: {layer})? [Yes/No] <Yes>: ");
+                        pko.Keywords.Add("Yes");
+                        pko.Keywords.Add("No");
+                        pko.Keywords.Default = "Yes";
+                        pko.AllowNone = true;
+
+                        PromptResult pkr = ed.GetKeywords(pko);
+                        bool fix = pkr.Status == PromptStatus.None ||
+                                   (pkr.Status == PromptStatus.OK &&
+                                    string.Equals(pkr.StringResult, "Yes", System.StringComparison.OrdinalIgnoreCase));
+
+                        if (fix)
+                        {
+                            BlockTableRecord btr =
+                                tr.GetObject(db.CurrentSpaceId, OpenMode.ForWrite) as BlockTableRecord;
+                            Geometry fixedGeom = HatchFixer.TryFixHatch(hatch, tr, btr, ed);
+                            if (fixedGeom != null)
+                                hatchGeoms.Add((fixedGeom, layer));
+                            else
+                                ed.WriteMessage($"\n  Hatch {oid.Handle} could not be fixed. Skipping.");
+                        }
+                        else
+                        {
+                            ed.WriteMessage($"\n  Skipping hatch {oid.Handle}.");
+                        }
+                    }
                 }
 
                 tr.Commit();
