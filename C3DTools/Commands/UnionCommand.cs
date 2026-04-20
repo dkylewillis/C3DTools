@@ -63,7 +63,7 @@ namespace C3DTools.Commands
                 }
 
                 // Validate geometries before operation
-                if (!GeometryValidator.ValidateAndFixGeometries(geometries, originals, ed, modelSpace, tr))
+                if (!GeometryValidator.ValidateAndFixGeometries(geometries, ed))
                 {
                     return;
                 }
@@ -72,7 +72,7 @@ namespace C3DTools.Commands
                 Geometry unionResult = geometries[0];
                 for (int i = 1; i < geometries.Count; i++)
                 {
-                    unionResult = unionResult.Union(geometries[i]);
+                    unionResult = BooleanOperationHelper.Union(unionResult, geometries[i]);
                 }
 
                 // Create new polyline(s) from result

@@ -8,7 +8,7 @@ namespace C3DTools.Helpers
 {
     public static class GeometryValidator
     {
-        public static bool ValidateAndFixGeometries(List<Geometry> geometries, List<Polyline> polylines, Editor ed, BlockTableRecord modelSpace, Transaction tr)
+        public static bool ValidateAndFixGeometries(List<Geometry> geometries, Editor ed)
         {
             var invalidIndices = new List<int>();
             var invalidMessages = new List<string>();

@@ -81,7 +81,7 @@ namespace C3DTools.Commands
                 }
 
                 // Validate geometries before operation
-                if (!GeometryValidator.ValidateAndFixGeometries(allGeometries, allPolylines, ed, modelSpace, tr))
+                if (!GeometryValidator.ValidateAndFixGeometries(allGeometries, ed))
                 {
                     return;
                 }
@@ -92,7 +92,7 @@ namespace C3DTools.Commands
                 // Perform difference operations
                 for (int i = 1; i < allGeometries.Count; i++)
                 {
-                    baseGeom = baseGeom.Difference(allGeometries[i]);
+                    baseGeom = BooleanOperationHelper.Difference(baseGeom, allGeometries[i]);
                 }
 
                 if (baseGeom.IsEmpty)

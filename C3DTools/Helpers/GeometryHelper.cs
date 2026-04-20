@@ -7,90 +7,96 @@ namespace C3DTools.Helpers
 {
     public static class GeometryHelper
     {
+        /// <summary>
+        /// Replaces <paramref name="original"/> with one or more new polylines derived from
+        /// <paramref name="fixedGeom"/>, copying all entity properties from the original.
+        /// The original is erased. Returns the number of polylines created.
+        /// </summary>
         public static int ReplaceWithFixedGeometry(Polyline original, Geometry fixedGeom, BlockTableRecord modelSpace, Transaction tr)
         {
-            var geometries = new List<Geometry>();
+            var plines = GeometriesToPolylines(FlattenGeometry(fixedGeom), original);
+            if (plines.Count == 0) return 0;
 
-            // Extract individual geometries from collections
-            if (fixedGeom is GeometryCollection collection)
+            foreach (var pline in plines)
             {
-                for (int i = 0; i < collection.NumGeometries; i++)
-                    geometries.Add(collection.GetGeometryN(i));
-            }
-            else
-            {
-                geometries.Add(fixedGeom);
+                modelSpace.AppendEntity(pline);
+                tr.AddNewlyCreatedDBObject(pline, true);
             }
 
-            // Filter to only Polygon and LineString types
-            geometries = geometries.Where(g => g is Polygon || g is LineString).ToList();
-            if (geometries.Count == 0) return 0;
-
-            // Create new polylines for all geometries (including replacement for original)
-            for (int i = 0; i < geometries.Count; i++)
-            {
-                var newPline = new Polyline();
-
-                // Copy properties from original
-                newPline.Layer = original.Layer;
-                newPline.Color = original.Color;
-                newPline.LineWeight = original.LineWeight;
-                newPline.Linetype = original.Linetype;
-
-                // Set geometry
-                GeometryConverter.SetPolylineGeometry(newPline, geometries[i]);
-
-                // Add to model space
-                modelSpace.AppendEntity(newPline);
-                tr.AddNewlyCreatedDBObject(newPline, true);
-            }
-
-            // Delete the original polyline
             original.UpgradeOpen();
             original.Erase();
 
-            return geometries.Count;
+            return plines.Count;
         }
 
+        /// <summary>
+        /// Creates new polylines from <paramref name="geom"/>, copying entity properties
+        /// from <paramref name="template"/>. Returns the number of polylines created.
+        /// </summary>
         public static int CreatePolylines(Geometry geom, Polyline template, BlockTableRecord modelSpace, Transaction tr)
         {
-            var geometries = new List<Geometry>();
+            var plines = GeometriesToPolylines(FlattenGeometry(geom), template);
 
-            // Extract individual geometries from collections
-            if (geom is GeometryCollection collection)
+            foreach (var pline in plines)
             {
-                for (int i = 0; i < collection.NumGeometries; i++)
-                    geometries.Add(collection.GetGeometryN(i));
-            }
-            else
-            {
-                geometries.Add(geom);
+                modelSpace.AppendEntity(pline);
+                tr.AddNewlyCreatedDBObject(pline, true);
             }
 
-            // Filter to only Polygon and LineString types
-            geometries = geometries.Where(g => g is Polygon || g is LineString).ToList();
-            if (geometries.Count == 0) return 0;
+            return plines.Count;
+        }
 
-            // Create new polylines for all geometries
-            foreach (var geometry in geometries)
+        /// <summary>
+        /// Flattens a geometry (or geometry collection) into individual geometries.
+        /// </summary>
+        public static IEnumerable<Geometry> FlattenGeometry(Geometry geom)
+        {
+            if (geom is GeometryCollection col)
+                return Enumerable.Range(0, col.NumGeometries).Select(col.GetGeometryN);
+            return new[] { geom };
+        }
+
+        /// <summary>
+        /// Recursively collects all non-empty <see cref="Polygon"/> instances from any geometry,
+        /// filtering out degenerate polygons below <paramref name="minArea"/>.
+        /// </summary>
+        public static List<Polygon> FlattenPolygons(Geometry geom, double minArea = 1e-10)
+        {
+            var result = new List<Polygon>();
+            if (geom is Polygon p)
             {
-                var newPline = new Polyline();
+                if (!p.IsEmpty && p.Area > minArea) result.Add(p);
+            }
+            else if (geom is GeometryCollection gc)
+            {
+                for (int i = 0; i < gc.NumGeometries; i++)
+                    result.AddRange(FlattenPolygons(gc.GetGeometryN(i), minArea));
+            }
+            return result;
+        }
 
-                // Copy properties from template
-                newPline.Layer = template.Layer;
-                newPline.Color = template.Color;
-                newPline.LineWeight = template.LineWeight;
-                newPline.Linetype = template.Linetype;
+        /// <summary>
+        /// Converts a sequence of NTS geometries to polylines, copying entity properties
+        /// from <paramref name="propertiesSource"/>. Unsupported geometry types are skipped.
+        /// </summary>
+        private static List<Polyline> GeometriesToPolylines(IEnumerable<Geometry> geometries, Polyline propertiesSource)
+        {
+            var result = new List<Polyline>();
 
-                // Set geometry
-                GeometryConverter.SetPolylineGeometry(newPline, geometry);
+            foreach (var geom in geometries.Where(g => g is Polygon || g is LineString))
+            {
+                var pline = GeometryConverter.NtsToPolyline(geom);
+                if (pline == null) continue;
 
-                // Add to model space
-                modelSpace.AppendEntity(newPline);
-                tr.AddNewlyCreatedDBObject(newPline, true);
+                pline.Layer      = propertiesSource.Layer;
+                pline.Color      = propertiesSource.Color;
+                pline.LineWeight = propertiesSource.LineWeight;
+                pline.Linetype   = propertiesSource.Linetype;
+
+                result.Add(pline);
             }
 
-            return geometries.Count;
+            return result;
         }
     }
 }

@@ -1,6 +1,5 @@
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
-using Autodesk.AutoCAD.Geometry;
 using C3DTools.Helpers;
 using NetTopologySuite.Geometries;
 using NetTopologySuite.Geometries.Utilities;
@@ -77,7 +76,7 @@ namespace C3DTools.Helpers
                 return null;
             }
 
-            List<Polygon> polygons = FlattenPolygons(fixedGeom);
+            List<Polygon> polygons = GeometryHelper.FlattenPolygons(fixedGeom);
             if (polygons.Count == 0)
             {
                 ed.WriteMessage($"\n  Fixed geometry has no usable polygons.");
@@ -94,16 +93,20 @@ namespace C3DTools.Helpers
 
             foreach (Polygon poly in polygons)
             {
-                Polyline? outerPline = RingToPolyline(poly.ExteriorRing, layer, lineWeight);
+                Polyline? outerPline = GeometryConverter.NtsToPolyline(poly.ExteriorRing);
                 if (outerPline == null) continue;
+                outerPline.Layer      = layer;
+                outerPline.LineWeight = lineWeight;
                 btr.AppendEntity(outerPline);
                 tr.AddNewlyCreatedDBObject(outerPline, true);
 
                 List<Polyline> holePlines = new List<Polyline>();
                 for (int h = 0; h < poly.NumInteriorRings; h++)
                 {
-                    Polyline? holePline = RingToPolyline(poly.GetInteriorRingN(h), layer, lineWeight);
+                    Polyline? holePline = GeometryConverter.NtsToPolyline(poly.GetInteriorRingN(h));
                     if (holePline == null) continue;
+                    holePline.Layer      = layer;
+                    holePline.LineWeight = lineWeight;
                     btr.AppendEntity(holePline);
                     tr.AddNewlyCreatedDBObject(holePline, true);
                     holePlines.Add(holePline);
@@ -143,6 +146,8 @@ namespace C3DTools.Helpers
                     newHatch.Erase();
                 }
 
+                // The boundary polylines were only needed so AutoCAD could evaluate the
+                // hatch pattern; they are not meant to persist in the drawing.
                 outerPline.UpgradeOpen();
                 outerPline.Erase();
                 foreach (Polyline hp in holePlines) { hp.UpgradeOpen(); hp.Erase(); }
@@ -168,44 +173,6 @@ namespace C3DTools.Helpers
             return null;
         }
 
-        /// <summary>
-        /// Recursively collects all non-empty Polygon instances from any Geometry.
-        /// </summary>
-        public static List<Polygon> FlattenPolygons(Geometry geom)
-        {
-            var result = new List<Polygon>();
-            if (geom is Polygon p)
-            {
-                if (!p.IsEmpty && p.Area > 1e-10) result.Add(p);
-            }
-            else if (geom is GeometryCollection gc)
-            {
-                for (int i = 0; i < gc.NumGeometries; i++)
-                    result.AddRange(FlattenPolygons(gc.GetGeometryN(i)));
-            }
-            return result;
-        }
-
-        /// <summary>
-        /// Creates a closed LWPOLYLINE from an NTS LinearRing.
-        /// Returns null if the ring has fewer than 3 unique vertices.
-        /// </summary>
-        public static Polyline? RingToPolyline(LineString ring, string layer, LineWeight lineWeight)
-        {
-            Coordinate[] coords = ring.Coordinates;
-            int vertCount = coords.Length - 1; // NTS closes rings with a duplicate last point
-            if (vertCount < 3) return null;
-
-            Polyline pline = new Polyline();
-            pline.Layer      = layer;
-            pline.LineWeight = lineWeight;
-
-            for (int i = 0; i < vertCount; i++)
-                pline.AddVertexAt(i, new Point2d(coords[i].X, coords[i].Y), 0, 0, 0);
-
-            pline.Closed = true;
-            return pline;
-        }
 
         /// <summary>
         /// Fixes "Hole lies outside shell" by re-classifying each ring based on containment.

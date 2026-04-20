@@ -199,7 +199,7 @@ namespace C3DTools.Commands
             Transaction tr,
             Database db)
         {
-            var polygons = FlattenToPolygons(geom);
+            var polygons = GeometryHelper.FlattenPolygons(geom);
             int count = 0;
 
             foreach (Polygon poly in polygons)
@@ -233,30 +233,6 @@ namespace C3DTools.Commands
             }
 
             return count;
-        }
-
-        /// <summary>
-        /// Flattens a Polygon or MultiPolygon into individual Polygon instances.
-        /// Other geometry types are ignored.
-        /// </summary>
-        private static List<Polygon> FlattenToPolygons(Geometry geom)
-        {
-            var result = new List<Polygon>();
-
-            if (geom is Polygon poly)
-            {
-                result.Add(poly);
-            }
-            else if (geom is GeometryCollection collection)
-            {
-                for (int i = 0; i < collection.NumGeometries; i++)
-                {
-                    if (collection.GetGeometryN(i) is Polygon p)
-                        result.Add(p);
-                }
-            }
-
-            return result;
         }
 
         /// <summary>

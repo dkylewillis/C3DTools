@@ -47,6 +47,11 @@ namespace C3DTools.Helpers
                     coords.Add(coords[0].Copy());
 
                 if (coords.Count < 4) return null; // minimum for a valid ring
+
+                // NTS requires exterior rings to be CCW; reverse if CW
+                if (ComputeSignedArea(coords) < 0)
+                    coords.Reverse();
+
                 return gf.CreatePolygon(coords.ToArray());
             }
             else
@@ -55,30 +60,60 @@ namespace C3DTools.Helpers
             }
         }
 
-        public static void SetPolylineGeometry(Polyline pline, Geometry geom)
+        /// <summary>
+        /// Creates and returns a new <see cref="Polyline"/> from an NTS <see cref="Geometry"/>.
+        /// Returns <c>null</c> if the geometry type is unsupported or has too few coordinates.
+        /// </summary>
+        public static Polyline? NtsToPolyline(Geometry geom)
         {
-            // Extract coordinates from the geometry
             Coordinate[] coords;
+            bool isClosed;
 
             if (geom is Polygon poly)
-                coords = poly.ExteriorRing.Coordinates;
-            else if (geom is LineString line)
-                coords = line.Coordinates;
-            else
-                return;
-
-            // Add vertices
-            bool isClosed = geom is Polygon;
-            int count = isClosed ? coords.Length - 1 : coords.Length; // skip closing duplicate
-
-            for (int i = 0; i < count; i++)
             {
-                pline.AddVertexAt(i,
-                    new Point2d(coords[i].X, coords[i].Y),
-                    0, 0, 0); // bulge=0, no arc
+                coords = poly.ExteriorRing.Coordinates;
+                isClosed = true;
             }
+            else if (geom is LinearRing ring)
+            {
+                // LinearRing extends LineString — must be checked first.
+                // NTS rings always carry a closing duplicate (first == last); treat as closed.
+                coords = ring.Coordinates;
+                isClosed = true;
+            }
+            else if (geom is LineString line)
+            {
+                coords = line.Coordinates;
+                isClosed = false;
+            }
+            else return null;
+
+            int count = isClosed ? coords.Length - 1 : coords.Length; // skip closing duplicate
+            if (count < 2) return null;
+
+            var pline = new Polyline();
+            for (int i = 0; i < count; i++)
+                pline.AddVertexAt(i, new Point2d(coords[i].X, coords[i].Y), 0, 0, 0);
 
             pline.Closed = isClosed;
+            return pline;
+        }
+
+        /// <summary>
+        /// Writes NTS geometry coordinates into an existing <see cref="Polyline"/>.
+        /// </summary>
+        /// <remarks>Prefer <see cref="NtsToPolyline"/> for new callers.</remarks>
+        public static void SetPolylineGeometry(Polyline pline, Geometry geom)
+        {
+            var temp = NtsToPolyline(geom);
+            if (temp == null) return;
+
+            int n = temp.NumberOfVertices;
+            for (int i = 0; i < n; i++)
+                pline.AddVertexAt(i, temp.GetPoint2dAt(i), temp.GetBulgeAt(i), 0, 0);
+
+            pline.Closed = temp.Closed;
+            temp.Dispose();
         }
 
         /// <summary>
@@ -167,22 +202,31 @@ namespace C3DTools.Helpers
             if (shellCoordsList.Count == 0) return null;
 
             // ── Step 4: build NTS geometry ────────────────────────────────────────
+            // NTS requires exterior rings CCW and holes CW; normalize before creating rings.
             try
             {
                 if (shellCoordsList.Count == 1)
                 {
-                    LinearRing   shell = gf.CreateLinearRing(shellCoordsList[0].ToArray());
-                    LinearRing[] holes = shellHolesList[0]
-                        .ConvertAll(h => gf.CreateLinearRing(h.ToArray())).ToArray();
+                    if (ComputeSignedArea(shellCoordsList[0]) < 0) shellCoordsList[0].Reverse();
+                    LinearRing shell = gf.CreateLinearRing(shellCoordsList[0].ToArray());
+                    LinearRing[] holes = shellHolesList[0].ConvertAll(h =>
+                    {
+                        if (ComputeSignedArea(h) > 0) h.Reverse(); // holes must be CW
+                        return gf.CreateLinearRing(h.ToArray());
+                    }).ToArray();
                     return gf.CreatePolygon(shell, holes);
                 }
                 else
                 {
                     for (int s = 0; s < shellCoordsList.Count; s++)
                     {
-                        LinearRing   shell = gf.CreateLinearRing(shellCoordsList[s].ToArray());
-                        LinearRing[] holes = shellHolesList[s]
-                            .ConvertAll(h => gf.CreateLinearRing(h.ToArray())).ToArray();
+                        if (ComputeSignedArea(shellCoordsList[s]) < 0) shellCoordsList[s].Reverse();
+                        LinearRing shell = gf.CreateLinearRing(shellCoordsList[s].ToArray());
+                        LinearRing[] holes = shellHolesList[s].ConvertAll(h =>
+                        {
+                            if (ComputeSignedArea(h) > 0) h.Reverse(); // holes must be CW
+                            return gf.CreateLinearRing(h.ToArray());
+                        }).ToArray();
                         polygons.Add(gf.CreatePolygon(shell, holes));
                     }
                     return gf.CreateMultiPolygon(polygons.ToArray());
@@ -297,49 +341,42 @@ namespace C3DTools.Helpers
 
         /// <summary>
         /// Tessellates an AutoCAD bulge arc into line-segment coordinates.
-        /// A bulge is tan(theta/4) where theta is the included angle of the arc.
-        /// Positive bulge = CCW arc, negative = CW arc.
+        /// Uses <see cref="CircularArc2d.GetSamplePoints"/> (same as <see cref="TessellateArc"/>)
+        /// so direction is handled by AutoCAD's API rather than manual angle math.
         /// </summary>
         private static List<Coordinate> TessellateBulge(Point2d start, Point2d end, double bulge, int segments = 16)
         {
-            // Derive arc centre and radius from the bulge value.
-            double dx   = end.X - start.X;
-            double dy   = end.Y - start.Y;
+            double dx    = end.X - start.X;
+            double dy    = end.Y - start.Y;
             double chord = Math.Sqrt(dx * dx + dy * dy);
-            if (chord < 1e-10) return new List<Coordinate> { new Coordinate(start.X, start.Y), new Coordinate(end.X, end.Y) };
 
-            double halfAngle = 2.0 * Math.Atan(bulge);          // half the included angle
-            double radius    = chord / (2.0 * Math.Sin(halfAngle));
+            if (chord < 1e-10)
+                return new List<Coordinate> { new Coordinate(start.X, start.Y), new Coordinate(end.X, end.Y) };
 
-            // Mid-point of the chord
-            double mx = (start.X + end.X) / 2.0;
-            double my = (start.Y + end.Y) / 2.0;
+            // Sagitta = perpendicular distance from chord midpoint to arc midpoint.
+            // Positive bulge = CCW arc = arc bows to the RIGHT of the chord direction.
+            // Right-hand perpendicular of (dx,dy) is (dy,-dx).
+            double perpX   =  dy / chord;
+            double perpY   = -dx / chord;
+            double sagitta = bulge * chord / 2.0;
 
-            // Perpendicular direction (rotated 90° CCW from chord direction)
-            double perpX = -dy / chord;
-            double perpY =  dx / chord;
+            Point2d arcMid = new Point2d(
+                (start.X + end.X) / 2.0 + perpX * sagitta,
+                (start.Y + end.Y) / 2.0 + perpY * sagitta);
 
-            // Distance from chord midpoint to arc centre
-            double d = radius * Math.Cos(halfAngle);
-
-            // Centre is offset in the perpendicular direction.
-            // For a positive (CCW) bulge the centre is to the left of the chord direction.
-            double cx = mx - perpX * d;
-            double cy = my - perpY * d;
-
-            double startAngle = Math.Atan2(start.Y - cy, start.X - cx);
-            double endAngle   = Math.Atan2(end.Y   - cy, end.X   - cx);
-            double sweep      = 2.0 * halfAngle; // signed sweep
-
-            var coords = new List<Coordinate>(segments + 1);
-            for (int i = 0; i <= segments; i++)
+            try
             {
-                double t     = (double)i / segments;
-                double angle = startAngle + sweep * t;
-                coords.Add(new Coordinate(cx + Math.Abs(radius) * Math.Cos(angle),
-                                          cy + Math.Abs(radius) * Math.Sin(angle)));
+                CircularArc2d arc = new CircularArc2d(start, arcMid, end);
+                Point2d[] pts = arc.GetSamplePoints(segments + 1);
+                var coords = new List<Coordinate>(pts.Length);
+                foreach (Point2d pt in pts)
+                    coords.Add(new Coordinate(pt.X, pt.Y));
+                return coords;
             }
-            return coords;
+            catch
+            {
+                return new List<Coordinate> { new Coordinate(start.X, start.Y), new Coordinate(end.X, end.Y) };
+            }
         }
 
         /// <summary>
