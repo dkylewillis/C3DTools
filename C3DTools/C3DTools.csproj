@@ -6,6 +6,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <PlatformTarget>x64</PlatformTarget>
+    <!-- MSB3277: WindowsBase version conflict is inherent between AutoCAD 2025 and .NET 8 -->
+    <MSBuildWarningsAsMessages>MSB3277</MSBuildWarningsAsMessages>
   </PropertyGroup>
 
   <ItemGroup>

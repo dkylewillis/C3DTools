@@ -20,7 +20,7 @@ namespace C3DTools.Helpers
         /// <paramref name="btr"/>. Returns the fixed NTS geometry so the caller can use it
         /// for further analysis, or <c>null</c> if fixing failed or was unnecessary.
         /// </summary>
-        public static Geometry TryFixHatch(
+        public static Geometry? TryFixHatch(
             Hatch original,
             Transaction tr,
             BlockTableRecord btr,
@@ -30,7 +30,7 @@ namespace C3DTools.Helpers
             string layer  = original.Layer ?? "0";
 
             // Extract NTS geometry
-            Geometry ntsGeom;
+            Geometry? ntsGeom;
             try { ntsGeom = GeometryConverter.HatchToNts(original); }
             catch (System.Exception ex)
             {
@@ -52,7 +52,7 @@ namespace C3DTools.Helpers
             ed.WriteMessage($"\n  Hatch {handle}: {validator.ValidationError.Message}");
 
             // Fix
-            Geometry fixedGeom;
+            Geometry? fixedGeom;
             try { fixedGeom = GeometryFixer.Fix(ntsGeom); }
             catch (System.Exception ex)
             {
@@ -90,20 +90,19 @@ namespace C3DTools.Helpers
             double           patScale    = original.PatternScale;
             double           patAngle    = original.PatternAngle;
 
-            int  createdCount = 0;
-            bool anyFailed    = false;
+            int createdCount = 0;
 
             foreach (Polygon poly in polygons)
             {
-                Polyline outerPline = RingToPolyline(poly.ExteriorRing, layer, lineWeight);
-                if (outerPline == null) { anyFailed = true; continue; }
+                Polyline? outerPline = RingToPolyline(poly.ExteriorRing, layer, lineWeight);
+                if (outerPline == null) continue;
                 btr.AppendEntity(outerPline);
                 tr.AddNewlyCreatedDBObject(outerPline, true);
 
                 List<Polyline> holePlines = new List<Polyline>();
                 for (int h = 0; h < poly.NumInteriorRings; h++)
                 {
-                    Polyline holePline = RingToPolyline(poly.GetInteriorRingN(h), layer, lineWeight);
+                    Polyline? holePline = RingToPolyline(poly.GetInteriorRingN(h), layer, lineWeight);
                     if (holePline == null) continue;
                     btr.AppendEntity(holePline);
                     tr.AddNewlyCreatedDBObject(holePline, true);
@@ -142,7 +141,6 @@ namespace C3DTools.Helpers
                 {
                     ed.WriteMessage($"\n  Failed to create replacement hatch – {ex.Message}");
                     newHatch.Erase();
-                    anyFailed = true;
                 }
 
                 outerPline.UpgradeOpen();
@@ -192,7 +190,7 @@ namespace C3DTools.Helpers
         /// Creates a closed LWPOLYLINE from an NTS LinearRing.
         /// Returns null if the ring has fewer than 3 unique vertices.
         /// </summary>
-        public static Polyline RingToPolyline(LineString ring, string layer, LineWeight lineWeight)
+        public static Polyline? RingToPolyline(LineString ring, string layer, LineWeight lineWeight)
         {
             Coordinate[] coords = ring.Coordinates;
             int vertCount = coords.Length - 1; // NTS closes rings with a duplicate last point
@@ -215,7 +213,7 @@ namespace C3DTools.Helpers
         /// clockwise boundaries that AutoCAD does not enforce winding direction for).
         /// Handles Polygon and MultiPolygon inputs; returns a Polygon or MultiPolygon.
         /// </summary>
-        public static Geometry FixHolesOutsideShell(Geometry geom)
+        public static Geometry? FixHolesOutsideShell(Geometry geom)
         {
             GeometryFactory gf = NetTopologySuite.NtsGeometryServices.Instance.CreateGeometryFactory();
 
@@ -265,7 +263,7 @@ namespace C3DTools.Helpers
                     {
                         if (shells[s].Contains(candidate.Centroid))
                         {
-                            shellHoles[s].Add(candidate.ExteriorRing as LinearRing);
+                            shellHoles[s].Add((LinearRing)candidate.ExteriorRing);
                             assignedHole = true;
                             break;
                         }
@@ -285,7 +283,7 @@ namespace C3DTools.Helpers
             {
                 try
                 {
-                    LinearRing shellRing = shells[s].ExteriorRing as LinearRing;
+                    LinearRing shellRing = (LinearRing)shells[s].ExteriorRing;
                     result.Add(gf.CreatePolygon(shellRing, shellHoles[s].ToArray()));
                 }
                 catch

@@ -2,15 +2,15 @@ using System.Windows.Forms;
 
 namespace C3DTools.UI
 {
-    public class HatchOverlapResultForm : Form
+    public class BasinLanduseResultForm : Form
     {
         private readonly string _clipboardContent;
-        private RichTextBox _textBox;
-        private Button _copyButton;
-        private Button _closeButton;
-        private Label _tipLabel;
+        private RichTextBox? _textBox;
+        private Button? _copyButton;
+        private Button? _closeButton;
+        private Label? _tipLabel;
 
-        public HatchOverlapResultForm(string displayText, string clipboardText)
+        public BasinLanduseResultForm(string displayText, string clipboardText)
         {
             _clipboardContent = clipboardText;
             BuildUI(displayText);
@@ -18,7 +18,7 @@ namespace C3DTools.UI
 
         private void BuildUI(string displayText)
         {
-            Text = "Hatch Overlap Results";
+            Text = "Basin Landuse Results";
             Width = 900;
             Height = 500;
             MinimumSize = new System.Drawing.Size(500, 300);

@@ -5,19 +5,20 @@ using Autodesk.AutoCAD.Runtime;
 
 namespace C3DTools.Commands
 {
-    public class TagCommands
+    public class BasinCommands
     {
-        private const string AppName = "C3DTools_ID";
+        private const string AppNameBasin = "C3DTools_Basin";
+        private const string BasinSplitAppName = "C3DTools_BasinSplit";
 
-        [CommandMethod("TAGID")]
-        public void TagId()
+        [CommandMethod("TAGBASIN")]
+        public void TagBasin()
         {
             Document doc = Application.DocumentManager.MdiActiveDocument;
             Database db = doc.Database;
             Editor ed = doc.Editor;
 
             // Prompt user to select a polyline
-            PromptEntityOptions peo = new PromptEntityOptions("\nSelect polyline to tag: ");
+            PromptEntityOptions peo = new PromptEntityOptions("\nSelect basin polyline to tag: ");
             peo.SetRejectMessage("\nMust be a polyline.");
             peo.AddAllowedClass(typeof(Polyline), true);
             PromptEntityResult per = ed.GetEntity(peo);
@@ -25,8 +26,8 @@ namespace C3DTools.Commands
             if (per.Status != PromptStatus.OK)
                 return;
 
-            // Prompt for string ID
-            PromptStringOptions pso = new PromptStringOptions("\nEnter ID string: ");
+            // Prompt for basin ID
+            PromptStringOptions pso = new PromptStringOptions("\nEnter basin ID: ");
             pso.AllowSpaces = true;
             PromptResult pr = ed.GetString(pso);
 
@@ -38,22 +39,20 @@ namespace C3DTools.Commands
             using (Transaction tr = db.TransactionManager.StartTransaction())
             {
                 // Register app name if needed
-                RegAppTable rat = tr.GetObject(db.RegAppTableId, OpenMode.ForRead) as RegAppTable;
-                if (!rat.Has(AppName))
+                RegAppTable rat = (RegAppTable)tr.GetObject(db.RegAppTableId, OpenMode.ForRead);
+                if (!rat.Has(AppNameBasin))
                 {
                     rat.UpgradeOpen();
                     RegAppTableRecord ratr = new RegAppTableRecord();
-                    ratr.Name = AppName;
+                    ratr.Name = AppNameBasin;
                     rat.Add(ratr);
                     tr.AddNewlyCreatedDBObject(ratr, true);
                 }
 
                 // Open polyline and attach XData
-                Polyline pline = tr.GetObject(per.ObjectId, OpenMode.ForWrite) as Polyline;
-
-                // Build XData ResultBuffer
+                Polyline pline = (Polyline)tr.GetObject(per.ObjectId, OpenMode.ForWrite);
                 ResultBuffer rb = new ResultBuffer(
-                    new TypedValue((int)DxfCode.ExtendedDataRegAppName, AppName),
+                    new TypedValue((int)DxfCode.ExtendedDataRegAppName, AppNameBasin),
                     new TypedValue((int)DxfCode.ExtendedDataAsciiString, idValue)
                 );
 
@@ -61,19 +60,19 @@ namespace C3DTools.Commands
                 rb.Dispose();
 
                 tr.Commit();
-                ed.WriteMessage($"\nPolyline tagged with ID: {idValue}");
+                ed.WriteMessage($"\nPolyline tagged with basin ID: {idValue}");
             }
         }
 
-        [CommandMethod("GETID")]
-        public void GetId()
+        [CommandMethod("GETBASIN")]
+        public void GetBasin()
         {
             Document doc = Application.DocumentManager.MdiActiveDocument;
             Database db = doc.Database;
             Editor ed = doc.Editor;
 
             // Prompt user to select a polyline
-            PromptEntityOptions peo = new PromptEntityOptions("\nSelect polyline to retrieve ID: ");
+            PromptEntityOptions peo = new PromptEntityOptions("\nSelect basin polyline to retrieve ID: ");
             peo.SetRejectMessage("\nMust be a polyline.");
             peo.AddAllowedClass(typeof(Polyline), true);
             PromptEntityResult per = ed.GetEntity(peo);
@@ -83,43 +82,62 @@ namespace C3DTools.Commands
 
             using (Transaction tr = db.TransactionManager.StartTransaction())
             {
-                Polyline pline = tr.GetObject(per.ObjectId, OpenMode.ForRead) as Polyline;
+                Polyline pline = (Polyline)tr.GetObject(per.ObjectId, OpenMode.ForRead);
 
-                ResultBuffer rb = pline.GetXDataForApplication(AppName);
+                ResultBuffer? rb = pline.GetXDataForApplication(AppNameBasin);
 
                 if (rb == null)
                 {
-                    ed.WriteMessage("\nNo ID tag found on this polyline.");
+                    ed.WriteMessage("\nNo basin tag found on this polyline.");
                 }
                 else
                 {
                     TypedValue[] values = rb.AsArray();
                     if (values.Length > 1 && values[1].TypeCode == (int)DxfCode.ExtendedDataAsciiString)
                     {
-                        string id = values[1].Value.ToString();
-                        ed.WriteMessage($"\nPolyline ID: {id}");
+                        string? id = values[1].Value.ToString();
+                        ed.WriteMessage($"\nBasin ID: {id}");
                     }
                     else
                     {
-                        ed.WriteMessage("\nInvalid ID tag structure.");
+                        ed.WriteMessage("\nInvalid basin tag structure.");
                     }
 
                     rb.Dispose();
+                }
+
+                // Also report split classification if this is a generated split piece
+                ResultBuffer? rbSplit = pline.GetXDataForApplication(BasinSplitAppName);
+                if (rbSplit != null)
+                {
+                    TypedValue[] splitValues = rbSplit.AsArray();
+                    // Payload: [RegAppName, basinId, "ONSITE"|"OFFSITE"]
+                    if (splitValues.Length > 2
+                        && splitValues[1].TypeCode == (int)DxfCode.ExtendedDataAsciiString
+                        && splitValues[2].TypeCode == (int)DxfCode.ExtendedDataAsciiString)
+                    {
+                        string? parentId = splitValues[1].Value?.ToString();
+                        string? classification = splitValues[2].Value?.ToString();
+                        ed.WriteMessage($"\nSplit Classification: {classification}");
+                        ed.WriteMessage($"\nParent Basin ID: {parentId}");
+                    }
+
+                    rbSplit.Dispose();
                 }
 
                 tr.Commit();
             }
         }
 
-        [CommandMethod("LABELID")]
-        public void LabelId()
+        [CommandMethod("LABELBASIN")]
+        public void LabelBasin()
         {
             Document doc = Application.DocumentManager.MdiActiveDocument;
             Database db = doc.Database;
             Editor ed = doc.Editor;
 
-            // Prompt user to select a tagged polyline
-            PromptEntityOptions peo = new PromptEntityOptions("\nSelect tagged polyline: ");
+            // Prompt user to select a tagged basin polyline
+            PromptEntityOptions peo = new PromptEntityOptions("\nSelect tagged basin polyline: ");
             peo.SetRejectMessage("\nMust be a polyline.");
             peo.AddAllowedClass(typeof(Polyline), true);
             PromptEntityResult per = ed.GetEntity(peo);
@@ -127,18 +145,18 @@ namespace C3DTools.Commands
             if (per.Status != PromptStatus.OK)
                 return;
 
-            // Retrieve ID from polyline
-            string idValue = null;
+            // Retrieve basin ID from polyline
+            string? idValue = null;
             ObjectId polylineOid = per.ObjectId;
 
             using (Transaction tr = db.TransactionManager.StartTransaction())
             {
-                Polyline pline = tr.GetObject(polylineOid, OpenMode.ForRead) as Polyline;
+                Polyline pline = (Polyline)tr.GetObject(polylineOid, OpenMode.ForRead);
 
-                ResultBuffer rb = pline.GetXDataForApplication(AppName);
+                ResultBuffer rb = pline.GetXDataForApplication(AppNameBasin);
                 if (rb == null)
                 {
-                    ed.WriteMessage("\nNo ID tag found on this polyline.");
+                    ed.WriteMessage("\nNo basin tag found on this polyline.");
                     return;
                 }
 
@@ -149,7 +167,7 @@ namespace C3DTools.Commands
                 }
                 else
                 {
-                    ed.WriteMessage("\nInvalid ID tag structure.");
+                    ed.WriteMessage("\nInvalid basin tag structure.");
                     rb.Dispose();
                     return;
                 }
@@ -168,8 +186,8 @@ namespace C3DTools.Commands
             // Place DBText at that location
             using (Transaction tr = db.TransactionManager.StartTransaction())
             {
-                BlockTableRecord btr = tr.GetObject(db.CurrentSpaceId, OpenMode.ForWrite) as BlockTableRecord;
-                Polyline pline = tr.GetObject(polylineOid, OpenMode.ForRead) as Polyline;
+                BlockTableRecord btr = (BlockTableRecord)tr.GetObject(db.CurrentSpaceId, OpenMode.ForWrite);
+                Polyline pline = (Polyline)tr.GetObject(polylineOid, OpenMode.ForRead);
 
                 DBText text = new DBText();
                 text.Position = ppr.Value;
@@ -181,7 +199,7 @@ namespace C3DTools.Commands
                 tr.AddNewlyCreatedDBObject(text, true);
 
                 tr.Commit();
-                ed.WriteMessage($"\nLabel '{idValue}' placed at {ppr.Value}");
+                ed.WriteMessage($"\nBasin label '{idValue}' placed at {ppr.Value}");
             }
         }
     }

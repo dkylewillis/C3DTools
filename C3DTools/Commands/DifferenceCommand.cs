@@ -42,8 +42,8 @@ namespace C3DTools.Commands
 
             using (var tr = db.TransactionManager.StartTransaction())
             {
-                var blockTable = tr.GetObject(db.BlockTableId, OpenMode.ForRead) as BlockTable;
-                var modelSpace = tr.GetObject(blockTable[BlockTableRecord.ModelSpace], OpenMode.ForWrite) as BlockTableRecord;
+                var blockTable = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+                var modelSpace = (BlockTableRecord)tr.GetObject(blockTable[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
 
                 // Get base geometry
                 var basePline = tr.GetObject(baseResult.ObjectId, OpenMode.ForRead) as Polyline;

@@ -40,15 +40,15 @@ namespace C3DTools.Commands
             using (Transaction tr = db.TransactionManager.StartTransaction())
             {
                 BlockTableRecord btr =
-                    tr.GetObject(db.CurrentSpaceId, OpenMode.ForWrite) as BlockTableRecord;
+                    (BlockTableRecord)tr.GetObject(db.CurrentSpaceId, OpenMode.ForWrite);
 
                 foreach (SelectedObject selObj in psr.Value)
                 {
-                    Hatch original = tr.GetObject(selObj.ObjectId, OpenMode.ForRead) as Hatch;
+                    Hatch? original = tr.GetObject(selObj.ObjectId, OpenMode.ForRead) as Hatch;
                     if (original == null) continue;
 
                     // -- 2. Extract and validate geometry -------------------------
-                    Geometry ntsGeom;
+                    Geometry? ntsGeom;
                     try { ntsGeom = GeometryConverter.HatchToNts(original); }
                     catch (System.Exception ex)
                     {
@@ -71,7 +71,7 @@ namespace C3DTools.Commands
                     }
 
                     // -- 3. Delegate fix to HatchFixer ----------------------------
-                    Geometry result = HatchFixer.TryFixHatch(original, tr, btr, ed);
+                    Geometry? result = HatchFixer.TryFixHatch(original, tr, btr, ed);
                     if (result != null)
                         fixedCount++;
                     else

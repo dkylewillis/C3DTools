@@ -8,16 +8,32 @@ namespace C3DTools.Helpers
 {
     public static class GeometryConverter
     {
-        public static Geometry PolylineToNts(Polyline pline)
+        public static Geometry? PolylineToNts(Polyline pline)
         {
             var coords = new List<Coordinate>();
+            int n = pline.NumberOfVertices;
 
-            for (int i = 0; i < pline.NumberOfVertices; i++)
+            for (int i = 0; i < n; i++)
             {
-                // NOTE: this flattens bulges (arcs) to straight segments.
-                // For arc-accurate conversion, tessellate bulge segments.
                 var pt = pline.GetPoint2dAt(i);
                 coords.Add(new Coordinate(pt.X, pt.Y));
+
+                double bulge = pline.GetBulgeAt(i);
+                if (Math.Abs(bulge) > 1e-9)
+                {
+                    // Tessellate the arc defined by this bulge to the next vertex.
+                    // For a closed polyline the next vertex of the last segment wraps to index 0.
+                    int nextIdx = (i + 1) % n;
+                    var ptNext = pline.GetPoint2dAt(nextIdx);
+                    var arcCoords = TessellateBulge(
+                        new Point2d(pt.X, pt.Y),
+                        new Point2d(ptNext.X, ptNext.Y),
+                        bulge);
+                    // arcCoords includes both endpoints; skip the first (already added above)
+                    // and skip the last (will be added as the next vertex).
+                    for (int k = 1; k < arcCoords.Count - 1; k++)
+                        coords.Add(arcCoords[k]);
+                }
             }
 
             if (coords.Count < 2) return null;
@@ -77,7 +93,7 @@ namespace C3DTools.Helpers
         /// accepted shells: if its centroid is contained by a shell it becomes a hole
         /// for that shell, otherwise it is promoted to a new shell.
         /// </summary>
-        public static Geometry HatchToNts(Hatch hatch)
+        public static Geometry? HatchToNts(Hatch hatch)
         {
             var gf       = new GeometryFactory();
             var polygons = new List<Polygon>();
@@ -90,12 +106,12 @@ namespace C3DTools.Helpers
 
             for (int i = 0; i < numLoops; i++)
             {
-                HatchLoop loop = null;
+                HatchLoop? loop = null;
                 try   { loop = hatch.GetLoopAt(i); }
                 catch { continue; }
                 if (loop == null) continue;
 
-                List<Coordinate> coords = null;
+                List<Coordinate>? coords = null;
                 try   { coords = ExtractLoopCoordinates(loop); }
                 catch { continue; }
 
@@ -182,7 +198,7 @@ namespace C3DTools.Helpers
         /// Extracts coordinates from a HatchLoop.
         /// Handles PolylineBoundary, CircularArcBoundary, EllipticalArcBoundary, LineBoundary, SplineBoundary.
         /// </summary>
-        private static List<Coordinate> ExtractLoopCoordinates(HatchLoop loop)
+        private static List<Coordinate>? ExtractLoopCoordinates(HatchLoop loop)
         {
             List<Coordinate> coords = new List<Coordinate>();
 
@@ -194,10 +210,22 @@ namespace C3DTools.Helpers
                     if (bulges == null || bulges.Count == 0)
                         return null;
 
-                    foreach (BulgeVertex bv in bulges)
+                    int bCount = bulges.Count;
+                    for (int b = 0; b < bCount; b++)
                     {
+                        BulgeVertex bv = bulges[b];
                         coords.Add(new Coordinate(bv.Vertex.X, bv.Vertex.Y));
-                        // NOTE: Bulges (arcs) are flattened here. For arc-accurate conversion, tessellate.
+
+                        if (Math.Abs(bv.Bulge) > 1e-9)
+                        {
+                            // Tessellate the arc to the next vertex (wraps for closed loop).
+                            BulgeVertex bvNext = bulges[(b + 1) % bCount];
+                            var arcCoords = TessellateBulge(
+                                bv.Vertex, bvNext.Vertex, bv.Bulge);
+                            // Skip first and last — they are the shared endpoints.
+                            for (int k = 1; k < arcCoords.Count - 1; k++)
+                                coords.Add(arcCoords[k]);
+                        }
                     }
                 }
                 else
@@ -264,6 +292,53 @@ namespace C3DTools.Helpers
                 return null; // Failed to extract coordinates
             }
 
+            return coords;
+        }
+
+        /// <summary>
+        /// Tessellates an AutoCAD bulge arc into line-segment coordinates.
+        /// A bulge is tan(theta/4) where theta is the included angle of the arc.
+        /// Positive bulge = CCW arc, negative = CW arc.
+        /// </summary>
+        private static List<Coordinate> TessellateBulge(Point2d start, Point2d end, double bulge, int segments = 16)
+        {
+            // Derive arc centre and radius from the bulge value.
+            double dx   = end.X - start.X;
+            double dy   = end.Y - start.Y;
+            double chord = Math.Sqrt(dx * dx + dy * dy);
+            if (chord < 1e-10) return new List<Coordinate> { new Coordinate(start.X, start.Y), new Coordinate(end.X, end.Y) };
+
+            double halfAngle = 2.0 * Math.Atan(bulge);          // half the included angle
+            double radius    = chord / (2.0 * Math.Sin(halfAngle));
+
+            // Mid-point of the chord
+            double mx = (start.X + end.X) / 2.0;
+            double my = (start.Y + end.Y) / 2.0;
+
+            // Perpendicular direction (rotated 90° CCW from chord direction)
+            double perpX = -dy / chord;
+            double perpY =  dx / chord;
+
+            // Distance from chord midpoint to arc centre
+            double d = radius * Math.Cos(halfAngle);
+
+            // Centre is offset in the perpendicular direction.
+            // For a positive (CCW) bulge the centre is to the left of the chord direction.
+            double cx = mx - perpX * d;
+            double cy = my - perpY * d;
+
+            double startAngle = Math.Atan2(start.Y - cy, start.X - cx);
+            double endAngle   = Math.Atan2(end.Y   - cy, end.X   - cx);
+            double sweep      = 2.0 * halfAngle; // signed sweep
+
+            var coords = new List<Coordinate>(segments + 1);
+            for (int i = 0; i <= segments; i++)
+            {
+                double t     = (double)i / segments;
+                double angle = startAngle + sweep * t;
+                coords.Add(new Coordinate(cx + Math.Abs(radius) * Math.Cos(angle),
+                                          cy + Math.Abs(radius) * Math.Sin(angle)));
+            }
             return coords;
         }
 
