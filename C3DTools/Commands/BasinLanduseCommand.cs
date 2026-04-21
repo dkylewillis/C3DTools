@@ -13,7 +13,6 @@ namespace C3DTools.Commands
     public class BasinLanduseCommand
     {
         private const string AppName = "C3DTools_Basin";
-        private const string BasinSplitAppName = "C3DTools_BasinSplit";
 
         [CommandMethod("BASINLANDUSE")]
         public void BasinLanduse()
@@ -23,8 +22,8 @@ namespace C3DTools.Commands
             Editor ed = doc.Editor;
 
             // Step 1: Auto-collect all basin-tagged polylines from model space.
-            // RowKey = handle string — always unique, handles duplicate basin IDs (split pieces).
-            var polylineRows = new List<(string RowKey, string BasinId, string Classification)>();
+            // RowKey = handle string — always unique, handles duplicate basin IDs.
+            var polylineRows = new List<(string RowKey, string BasinId, string Boundary, string Development)>();
             var polylineGeoms = new Dictionary<string, Geometry>(); // keyed by RowKey
 
             using (Transaction tr = db.TransactionManager.StartTransaction())
@@ -47,8 +46,9 @@ namespace C3DTools.Commands
                     if (geom != null && geom.IsValid)
                     {
                         string rowKey = oid.Handle.ToString();
-                        string classification = GetPolylineClassification(pline) ?? string.Empty;
-                        polylineRows.Add((rowKey, basinId, classification));
+                        string boundary = GetPolylineBoundary(pline) ?? string.Empty;
+                        string development = GetPolylineDevelopment(pline) ?? string.Empty;
+                        polylineRows.Add((rowKey, basinId, boundary, development));
                         polylineGeoms[rowKey] = geom;
                     }
                     else
@@ -139,7 +139,7 @@ namespace C3DTools.Commands
 
             // Step 4: Compute overlap areas per row per layer
             var results = new Dictionary<string, Dictionary<string, double>>(); // keyed by RowKey
-            foreach (var (rowKey, _, _) in polylineRows)
+            foreach (var (rowKey, _, _, _) in polylineRows)
                 results[rowKey] = new Dictionary<string, double>();
 
             var allLayers = new List<string>();
@@ -149,7 +149,7 @@ namespace C3DTools.Commands
                 if (!allLayers.Contains(layer))
                     allLayers.Add(layer);
 
-                foreach (var (rowKey, _, _) in polylineRows)
+                foreach (var (rowKey, _, _, _) in polylineRows)
                 {
                     Geometry intersection = polylineGeoms[rowKey].Intersection(hatchGeom);
                     if (intersection != null && !intersection.IsEmpty && intersection.Area > 0)
@@ -164,18 +164,20 @@ namespace C3DTools.Commands
             allLayers.Sort();
 
             const string areaFmt = "F4";
-            const string classificationHeader = "Classification";
+            const string boundaryHeader = "Boundary";
+            const string developmentHeader = "Development";
 
-            // Only show Classification column when split pieces (ONSITE/OFFSITE) are present
-            bool hasClassification = polylineRows.Any(r => r.Classification is "ONSITE" or "OFFSITE");
+            // Check if we have any basins with Boundary or Development attributes
+            bool hasBoundary = polylineRows.Any(r => !string.IsNullOrEmpty(r.Boundary));
+            bool hasDevelopment = polylineRows.Any(r => !string.IsNullOrEmpty(r.Development));
 
-            // Step 5: Aggregate by (BasinId, Classification) — sums multiple pieces with the
-            // same basin ID and classification into one row (e.g. two ONSITE polygon fragments).
-            var aggregated = new Dictionary<(string BasinId, string Classification), Dictionary<string, double>>();
+            // Step 5: Aggregate by (BasinId, Boundary, Development) — sums multiple pieces with the
+            // same basin ID and attributes into one row.
+            var aggregated = new Dictionary<(string BasinId, string Boundary, string Development), Dictionary<string, double>>();
 
-            foreach (var (rowKey, basinId, classification) in polylineRows)
+            foreach (var (rowKey, basinId, boundary, development) in polylineRows)
             {
-                var key = (basinId, classification);
+                var key = (basinId, boundary, development);
                 if (!aggregated.ContainsKey(key))
                     aggregated[key] = new Dictionary<string, double>();
 
@@ -190,33 +192,28 @@ namespace C3DTools.Commands
             // Preserve first-seen basin order
             var basinOrder = polylineRows.Select(r => r.BasinId).Distinct().ToList();
 
-            // Build ordered display rows. Per basin:
-            //   1. Parent row  — no split XData, shown as "(parent)" in Classification column
-            //   2. ONSITE row  — split piece(s) aggregated
-            //   3. OFFSITE row — split piece(s) aggregated
-            var displayRows = new List<(string BasinId, string DisplayClass, Dictionary<string, double> Areas)>();
+            // Build ordered display rows. Group by basin ID, then by Development, then by Boundary
+            var displayRows = new List<(string BasinId, string Boundary, string Development, Dictionary<string, double> Areas)>();
 
             foreach (string basinId in basinOrder)
             {
-                // Parent row (classification == "")
-                var parentKey = (basinId, string.Empty);
-                if (aggregated.ContainsKey(parentKey))
-                    displayRows.Add((basinId, string.Empty, aggregated[parentKey]));
+                // Get all combinations for this basin
+                var basinKeys = aggregated.Keys.Where(k => k.BasinId == basinId).ToList();
 
-                // One row per split classification
-                foreach (string splitClass in new[] { "ONSITE", "OFFSITE" })
+                // Order: first by development (empty, Pre, Post), then by boundary (empty, Onsite, Offsite)
+                var ordered = basinKeys.OrderBy(k => string.IsNullOrEmpty(k.Development) ? 0 : k.Development == "Pre" ? 1 : 2)
+                                      .ThenBy(k => string.IsNullOrEmpty(k.Boundary) ? 0 : k.Boundary == "Onsite" ? 1 : 2);
+
+                foreach (var key in ordered)
                 {
-                    var key = (basinId, splitClass);
-                    if (!aggregated.ContainsKey(key)) continue;
-
-                    displayRows.Add((basinId, splitClass, aggregated[key]));
+                    displayRows.Add((key.BasinId, key.Boundary, key.Development, aggregated[key]));
                 }
             }
 
             // Step 6: Build output strings
             // Pre-calculate row totals indexed to match displayRows
             var rowTotals = new List<double>();
-            foreach (var (_, _, areas) in displayRows)
+            foreach (var (_, _, _, areas) in displayRows)
             {
                 double total = 0;
                 foreach (string layer in allLayers)
@@ -229,11 +226,13 @@ namespace C3DTools.Commands
 
             // Column widths for aligned monospace display
             int idWidth = basinOrder.Concat(new[] { "id" }).Max(s => s.Length);
-            int classWidth = hasClassification
-                ? displayRows.Select(r => string.IsNullOrEmpty(r.DisplayClass) ? "(parent)" : r.DisplayClass)
-                             .Concat(new[] { classificationHeader })
-                             .Max(s => s.Length)
+            int boundaryWidth = hasBoundary
+                ? displayRows.Select(r => r.Boundary).Concat(new[] { boundaryHeader }).Max(s => s.Length)
                 : 0;
+            int developmentWidth = hasDevelopment
+                ? displayRows.Select(r => r.Development).Concat(new[] { developmentHeader }).Max(s => s.Length)
+                : 0;
+
             var colWidths = new Dictionary<string, int>();
             foreach (string col in allColumns)
                 colWidths[col] = col.Length;
@@ -248,27 +247,31 @@ namespace C3DTools.Commands
             // Space-padded display text
             var displaySb = new StringBuilder();
             displaySb.Append("id".PadRight(idWidth));
-            if (hasClassification)
-                displaySb.Append("  " + classificationHeader.PadRight(classWidth));
+            if (hasBoundary)
+                displaySb.Append("  " + boundaryHeader.PadRight(boundaryWidth));
+            if (hasDevelopment)
+                displaySb.Append("  " + developmentHeader.PadRight(developmentWidth));
             foreach (string col in allColumns)
                 displaySb.Append("  " + col.PadLeft(colWidths[col]));
             displaySb.AppendLine();
             displaySb.Append(new string('-', idWidth));
-            if (hasClassification)
-                displaySb.Append("  " + new string('-', classWidth));
+            if (hasBoundary)
+                displaySb.Append("  " + new string('-', boundaryWidth));
+            if (hasDevelopment)
+                displaySb.Append("  " + new string('-', developmentWidth));
             foreach (string col in allColumns)
                 displaySb.Append("  " + new string('-', colWidths[col]));
             displaySb.AppendLine();
 
             for (int i = 0; i < displayRows.Count; i++)
             {
-                var (basinId, displayClass, areas) = displayRows[i];
-                string classLabel = string.IsNullOrEmpty(displayClass) && hasClassification
-                    ? "(parent)" : displayClass;
+                var (basinId, boundary, development, areas) = displayRows[i];
 
                 displaySb.Append(basinId.PadRight(idWidth));
-                if (hasClassification)
-                    displaySb.Append("  " + classLabel.PadRight(classWidth));
+                if (hasBoundary)
+                    displaySb.Append("  " + (boundary ?? "").PadRight(boundaryWidth));
+                if (hasDevelopment)
+                    displaySb.Append("  " + (development ?? "").PadRight(developmentWidth));
                 foreach (string layer in allLayers)
                 {
                     string cell = areas.TryGetValue(layer, out double a) ? a.ToString(areaFmt) : "";
@@ -277,7 +280,7 @@ namespace C3DTools.Commands
                 displaySb.Append("  " + rowTotals[i].ToString(areaFmt).PadLeft(colWidths["Total"]));
                 displaySb.AppendLine();
 
-                // Blank line after each basin's last row (subtotal, or parent if no splits)
+                // Blank line after each basin's last row
                 bool isLastRowForBasin = i == displayRows.Count - 1
                     || displayRows[i + 1].BasinId != basinId;
                 if (isLastRowForBasin && i < displayRows.Count - 1)
@@ -287,18 +290,18 @@ namespace C3DTools.Commands
             // Tab-separated clipboard text
             var clipSb = new StringBuilder();
             clipSb.Append("id");
-            if (hasClassification) { clipSb.Append("\t"); clipSb.Append(classificationHeader); }
+            if (hasBoundary) { clipSb.Append("\t"); clipSb.Append(boundaryHeader); }
+            if (hasDevelopment) { clipSb.Append("\t"); clipSb.Append(developmentHeader); }
             foreach (string col in allColumns) { clipSb.Append("\t"); clipSb.Append(col); }
             clipSb.AppendLine();
 
             for (int i = 0; i < displayRows.Count; i++)
             {
-                var (basinId, displayClass, areas) = displayRows[i];
-                string classLabel = string.IsNullOrEmpty(displayClass) && hasClassification
-                    ? "(parent)" : displayClass;
+                var (basinId, boundary, development, areas) = displayRows[i];
 
                 clipSb.Append(basinId);
-                if (hasClassification) { clipSb.Append("\t"); clipSb.Append(classLabel); }
+                if (hasBoundary) { clipSb.Append("\t"); clipSb.Append(boundary ?? ""); }
+                if (hasDevelopment) { clipSb.Append("\t"); clipSb.Append(development ?? ""); }
                 foreach (string layer in allLayers)
                 {
                     clipSb.Append("\t");
@@ -316,22 +319,41 @@ namespace C3DTools.Commands
         }
 
         /// <summary>
-        /// Retrieves the split classification ("ONSITE" or "OFFSITE") from a polyline's
-        /// C3DTools_BasinSplit XData. Returns null if the polyline is not a split piece.
+        /// Retrieves the Boundary attribute from a polyline's XData.
+        /// Returns the boundary string ("Onsite", "Offsite") or empty string if not set.
         /// </summary>
-        private string? GetPolylineClassification(Polyline pline)
+        private string? GetPolylineBoundary(Polyline pline)
         {
-            ResultBuffer? rb = pline.GetXDataForApplication(BasinSplitAppName);
-            if (rb == null) return null;
+            ResultBuffer? rb = pline.GetXDataForApplication(AppName);
+            if (rb == null) return string.Empty;
 
             TypedValue[] values = rb.AsArray();
             rb.Dispose();
 
-            // Payload: [RegAppName, basinId, "ONSITE"|"OFFSITE"]
+            // XData structure: [AppName, BasinId, Boundary, Development]
             if (values.Length > 2 && values[2].TypeCode == (int)DxfCode.ExtendedDataAsciiString)
-                return values[2].Value?.ToString();
+                return values[2].Value?.ToString() ?? string.Empty;
 
-            return null;
+            return string.Empty;
+        }
+
+        /// <summary>
+        /// Retrieves the Development attribute from a polyline's XData.
+        /// Returns the development string ("Pre", "Post") or empty string if not set.
+        /// </summary>
+        private string? GetPolylineDevelopment(Polyline pline)
+        {
+            ResultBuffer? rb = pline.GetXDataForApplication(AppName);
+            if (rb == null) return string.Empty;
+
+            TypedValue[] values = rb.AsArray();
+            rb.Dispose();
+
+            // XData structure: [AppName, BasinId, Boundary, Development]
+            if (values.Length > 3 && values[3].TypeCode == (int)DxfCode.ExtendedDataAsciiString)
+                return values[3].Value?.ToString() ?? string.Empty;
+
+            return string.Empty;
         }
 
         /// <summary>
