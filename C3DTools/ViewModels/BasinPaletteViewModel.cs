@@ -30,7 +30,7 @@ namespace C3DTools.ViewModels
             TaggedBasins = new ObservableCollection<BasinInfo>();
             UntaggedBasins = new ObservableCollection<BasinInfo>();
             AvailableLayers = new ObservableCollection<string>();
-            BoundaryOptions = new ObservableCollection<string> { "", "Onsite", "Offsite" };
+            BoundaryOptions = new ObservableCollection<string> { "", "ONSITE", "OFFSITE" };
             DevelopmentOptions = new ObservableCollection<string> { "", "Pre", "Post" };
 
             TagBasinCommand = new RelayCommand(ExecuteTagBasin, CanExecuteTagBasin);
@@ -71,8 +71,34 @@ namespace C3DTools.ViewModels
 
                 // Populate the edit fields with current values
                 NewBasinId = value?.BasinId ?? string.Empty;
-                SelectedBoundary = value?.Boundary ?? string.Empty;
-                SelectedDevelopment = value?.Development ?? string.Empty;
+
+                // Normalize boundary to match available options (case-insensitive)
+                string boundaryValue = value?.Boundary ?? string.Empty;
+                if (!string.IsNullOrWhiteSpace(boundaryValue))
+                {
+                    // Match to available options case-insensitively
+                    var matchingOption = BoundaryOptions.FirstOrDefault(
+                        opt => opt.Equals(boundaryValue, System.StringComparison.OrdinalIgnoreCase));
+                    SelectedBoundary = matchingOption ?? string.Empty;
+                }
+                else
+                {
+                    SelectedBoundary = string.Empty;
+                }
+
+                // Normalize development to match available options (case-insensitive)
+                string developmentValue = value?.Development ?? string.Empty;
+                if (!string.IsNullOrWhiteSpace(developmentValue))
+                {
+                    // Match to available options case-insensitively
+                    var matchingDevOption = DevelopmentOptions.FirstOrDefault(
+                        opt => opt.Equals(developmentValue, System.StringComparison.OrdinalIgnoreCase));
+                    SelectedDevelopment = matchingDevOption ?? string.Empty;
+                }
+                else
+                {
+                    SelectedDevelopment = string.Empty;
+                }
 
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(TagButtonText));

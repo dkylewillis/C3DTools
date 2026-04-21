@@ -24,7 +24,7 @@ namespace C3DTools.Commands
             Editor ed = doc.Editor;
 
             // ── 1. Collect all C3DTools_Basin-tagged closed polylines ───────────────
-            var taggedBasins = new List<(ObjectId id, string basinId)>();
+            var taggedBasins = new List<(ObjectId id, string basinId, string development)>();
 
             using (Transaction tr = db.TransactionManager.StartTransaction())
             {
@@ -48,7 +48,10 @@ namespace C3DTools.Commands
                     if (values.Length > 1 && values[1].TypeCode == (int)DxfCode.ExtendedDataAsciiString)
                     {
                         string basinId = values[1].Value?.ToString() ?? string.Empty;
-                        taggedBasins.Add((oid, basinId));
+                        string development = (values.Length > 3 && values[3].TypeCode == (int)DxfCode.ExtendedDataAsciiString)
+                            ? values[3].Value?.ToString() ?? string.Empty
+                            : string.Empty;
+                        taggedBasins.Add((oid, basinId, development));
                     }
                 }
 
@@ -152,7 +155,7 @@ namespace C3DTools.Commands
                 int offsiteCount = 0;
                 int processedCount = 0;
 
-                foreach ((ObjectId basinOid, string basinId) in taggedBasins)
+                foreach ((ObjectId basinOid, string basinId, string development) in taggedBasins)
                 {
                     Polyline basinPline = (Polyline)tr.GetObject(basinOid, OpenMode.ForRead);
                     Geometry? basinGeom = GeometryConverter.PolylineToNts(basinPline);
@@ -168,12 +171,12 @@ namespace C3DTools.Commands
                     // Intersection → onsite
                     Geometry onsiteGeom = BooleanOperationHelper.Intersect(basinGeom, siteGeom);
                     if (!onsiteGeom.IsEmpty)
-                        onsiteCount += CreateSplitPolylines(onsiteGeom, basinId, OnsiteLabel, OnsiteLayer, modelSpace, tr, db);
+                        onsiteCount += CreateSplitPolylines(onsiteGeom, basinId, OnsiteLabel, OnsiteLayer, development, modelSpace, tr, db);
 
                     // Difference → offsite
                     Geometry offsiteGeom = BooleanOperationHelper.Difference(basinGeom, siteGeom);
                     if (!offsiteGeom.IsEmpty)
-                        offsiteCount += CreateSplitPolylines(offsiteGeom, basinId, OffsiteLabel, OffsiteLayer, modelSpace, tr, db);
+                        offsiteCount += CreateSplitPolylines(offsiteGeom, basinId, OffsiteLabel, OffsiteLayer, development, modelSpace, tr, db);
                 }
 
                 tr.Commit();
@@ -195,6 +198,7 @@ namespace C3DTools.Commands
             string basinId,
             string splitLabel,
             string layer,
+            string development,
             BlockTableRecord modelSpace,
             Transaction tr,
             Database db)
@@ -211,14 +215,14 @@ namespace C3DTools.Commands
                 modelSpace.AppendEntity(newPline);
                 tr.AddNewlyCreatedDBObject(newPline, true);
 
-                // Tag with basin ID and Boundary attribute using new structure
+                // Tag with basin ID, Boundary, and Development from parent
                 // [AppName, BasinId, Boundary, Development]
                 string boundary = splitLabel; // "ONSITE" or "OFFSITE"
                 ResultBuffer rbBasin = new ResultBuffer(
                     new TypedValue((int)DxfCode.ExtendedDataRegAppName, AppNameBasin),
                     new TypedValue((int)DxfCode.ExtendedDataAsciiString, basinId),
                     new TypedValue((int)DxfCode.ExtendedDataAsciiString, boundary),
-                    new TypedValue((int)DxfCode.ExtendedDataAsciiString, "") // Development (empty)
+                    new TypedValue((int)DxfCode.ExtendedDataAsciiString, development)
                 );
                 newPline.XData = rbBasin;
                 rbBasin.Dispose();

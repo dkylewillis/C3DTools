@@ -189,8 +189,8 @@ namespace C3DTools.Commands
                 }
             }
 
-            // Preserve first-seen basin order
-            var basinOrder = polylineRows.Select(r => r.BasinId).Distinct().ToList();
+            // Sort basins using natural alphanumeric ordering (letters first, then numbers)
+            var basinOrder = polylineRows.Select(r => r.BasinId).Distinct().OrderBy(id => id, new NaturalBasinIdComparer()).ToList();
 
             // Build ordered display rows. Group by basin ID, then by Development, then by Boundary
             var displayRows = new List<(string BasinId, string Boundary, string Development, Dictionary<string, double> Areas)>();
@@ -299,7 +299,10 @@ namespace C3DTools.Commands
             {
                 var (basinId, boundary, development, areas) = displayRows[i];
 
+                // Use Excel formula syntax to force Basin ID as text (prevents date conversion)
+                clipSb.Append("=\"");
                 clipSb.Append(basinId);
+                clipSb.Append("\"");
                 if (hasBoundary) { clipSb.Append("\t"); clipSb.Append(boundary ?? ""); }
                 if (hasDevelopment) { clipSb.Append("\t"); clipSb.Append(development ?? ""); }
                 foreach (string layer in allLayers)
@@ -377,6 +380,78 @@ namespace C3DTools.Commands
 
             rb.Dispose();
             return null;
+        }
+
+        /// <summary>
+        /// Natural alphanumeric comparer for basin IDs.
+        /// Sorts letters first (A, A1, A2, B1-1...), then numbers (1, 1-1, 1-2, 2-1...).
+        /// Within each category, uses natural number ordering (A1, A2, A10 instead of A1, A10, A2).
+        /// </summary>
+        private class NaturalBasinIdComparer : IComparer<string>
+        {
+            public int Compare(string? x, string? y)
+            {
+                if (x == y) return 0;
+                if (x == null) return -1;
+                if (y == null) return 1;
+
+                // Check if strings start with letter or digit
+                bool xStartsWithLetter = x.Length > 0 && char.IsLetter(x[0]);
+                bool yStartsWithLetter = y.Length > 0 && char.IsLetter(y[0]);
+
+                // Letters come before numbers
+                if (xStartsWithLetter && !yStartsWithLetter) return -1;
+                if (!xStartsWithLetter && yStartsWithLetter) return 1;
+
+                // Both start with same type, use natural sort
+                return CompareNatural(x, y);
+            }
+
+            private int CompareNatural(string x, string y)
+            {
+                int ix = 0, iy = 0;
+
+                while (ix < x.Length && iy < y.Length)
+                {
+                    char cx = x[ix];
+                    char cy = y[iy];
+
+                    // If both are digits, compare numerically
+                    if (char.IsDigit(cx) && char.IsDigit(cy))
+                    {
+                        // Extract full numbers
+                        int numX = 0;
+                        while (ix < x.Length && char.IsDigit(x[ix]))
+                        {
+                            numX = numX * 10 + (x[ix] - '0');
+                            ix++;
+                        }
+
+                        int numY = 0;
+                        while (iy < y.Length && char.IsDigit(y[iy]))
+                        {
+                            numY = numY * 10 + (y[iy] - '0');
+                            iy++;
+                        }
+
+                        if (numX != numY)
+                            return numX.CompareTo(numY);
+                    }
+                    else
+                    {
+                        // Compare characters directly
+                        int cmp = char.ToUpperInvariant(cx).CompareTo(char.ToUpperInvariant(cy));
+                        if (cmp != 0)
+                            return cmp;
+
+                        ix++;
+                        iy++;
+                    }
+                }
+
+                // One string is prefix of other
+                return x.Length.CompareTo(y.Length);
+            }
         }
     }
 }

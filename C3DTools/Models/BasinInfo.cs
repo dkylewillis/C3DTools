@@ -13,7 +13,7 @@ namespace C3DTools.Models
         public string? Layer { get; set; }
 
         /// <summary>
-        /// Boundary attribute: "Onsite", "Offsite", or empty string
+        /// Boundary attribute: "ONSITE", "OFFSITE", or empty string
         /// </summary>
         public string Boundary { get; set; } = string.Empty;
 
