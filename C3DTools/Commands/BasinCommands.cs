@@ -8,7 +8,6 @@ namespace C3DTools.Commands
     public class BasinCommands
     {
         private const string AppNameBasin = "C3DTools_Basin";
-        private const string BasinSplitAppName = "C3DTools_BasinSplit";
 
         [CommandMethod("TAGBASIN")]
         public void TagBasin()
@@ -49,11 +48,13 @@ namespace C3DTools.Commands
                     tr.AddNewlyCreatedDBObject(ratr, true);
                 }
 
-                // Open polyline and attach XData
+                // Open polyline and attach XData with new structure
                 Polyline pline = (Polyline)tr.GetObject(per.ObjectId, OpenMode.ForWrite);
                 ResultBuffer rb = new ResultBuffer(
                     new TypedValue((int)DxfCode.ExtendedDataRegAppName, AppNameBasin),
-                    new TypedValue((int)DxfCode.ExtendedDataAsciiString, idValue)
+                    new TypedValue((int)DxfCode.ExtendedDataAsciiString, idValue),
+                    new TypedValue((int)DxfCode.ExtendedDataAsciiString, ""),  // Boundary (empty)
+                    new TypedValue((int)DxfCode.ExtendedDataAsciiString, "")   // Development (empty)
                 );
 
                 pline.XData = rb;
@@ -93,6 +94,8 @@ namespace C3DTools.Commands
                 else
                 {
                     TypedValue[] values = rb.AsArray();
+
+                    // Basin ID (index 1)
                     if (values.Length > 1 && values[1].TypeCode == (int)DxfCode.ExtendedDataAsciiString)
                     {
                         string? id = values[1].Value.ToString();
@@ -101,28 +104,26 @@ namespace C3DTools.Commands
                     else
                     {
                         ed.WriteMessage("\nInvalid basin tag structure.");
+                        rb.Dispose();
+                        return;
+                    }
+
+                    // Boundary (index 2)
+                    if (values.Length > 2 && values[2].TypeCode == (int)DxfCode.ExtendedDataAsciiString)
+                    {
+                        string? boundary = values[2].Value?.ToString();
+                        ed.WriteMessage($"\nBoundary: {boundary}");
+                    }
+
+                    // Development (index 3)
+                    if (values.Length > 3 && values[3].TypeCode == (int)DxfCode.ExtendedDataAsciiString)
+                    {
+                        string? dev = values[3].Value?.ToString();
+                        if (!string.IsNullOrEmpty(dev))
+                            ed.WriteMessage($"\nDevelopment: {dev}");
                     }
 
                     rb.Dispose();
-                }
-
-                // Also report split classification if this is a generated split piece
-                ResultBuffer? rbSplit = pline.GetXDataForApplication(BasinSplitAppName);
-                if (rbSplit != null)
-                {
-                    TypedValue[] splitValues = rbSplit.AsArray();
-                    // Payload: [RegAppName, basinId, "ONSITE"|"OFFSITE"]
-                    if (splitValues.Length > 2
-                        && splitValues[1].TypeCode == (int)DxfCode.ExtendedDataAsciiString
-                        && splitValues[2].TypeCode == (int)DxfCode.ExtendedDataAsciiString)
-                    {
-                        string? parentId = splitValues[1].Value?.ToString();
-                        string? classification = splitValues[2].Value?.ToString();
-                        ed.WriteMessage($"\nSplit Classification: {classification}");
-                        ed.WriteMessage($"\nParent Basin ID: {parentId}");
-                    }
-
-                    rbSplit.Dispose();
                 }
 
                 tr.Commit();

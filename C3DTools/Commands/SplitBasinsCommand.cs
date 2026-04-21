@@ -11,7 +11,6 @@ namespace C3DTools.Commands
     public class SplitBasinsCommand
     {
         private const string AppNameBasin = "C3DTools_Basin";
-        private const string BasinSplitAppName = "C3DTools_BasinSplit";
         private const string OnsiteLabel = "ONSITE";
         private const string OffsiteLabel = "OFFSITE";
         private const string OnsiteLayer = "CALC-BASN-ONSITE";
@@ -90,7 +89,7 @@ namespace C3DTools.Commands
                 BlockTable bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
                 BlockTableRecord modelSpace = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
 
-                // ── 3a. Register RegApp names ──────────────────────────────────
+                // ── 3a. Register RegApp name ──────────────────────────────────
                 RegAppTable rat = (RegAppTable)tr.GetObject(db.RegAppTableId, OpenMode.ForRead);
 
                 if (!rat.Has(AppNameBasin))
@@ -101,30 +100,31 @@ namespace C3DTools.Commands
                     tr.AddNewlyCreatedDBObject(ratr, true);
                 }
 
-                if (!rat.Has(BasinSplitAppName))
-                {
-                    if (rat.IsWriteEnabled == false) rat.UpgradeOpen();
-                    RegAppTableRecord ratr = new RegAppTableRecord { Name = BasinSplitAppName };
-                    rat.Add(ratr);
-                    tr.AddNewlyCreatedDBObject(ratr, true);
-                }
-
                 // ── 3b. Ensure layers exist ────────────────────────────────────
                 EnsureLayer(OnsiteLayer, 3, tr, db);   // 3 = green
                 EnsureLayer(OffsiteLayer, 1, tr, db);  // 1 = red
 
-                // ── 3c. Erase existing C3DTools_BasinSplit polylines ──────────
+                // ── 3c. Erase existing split basin polylines (Boundary = ONSITE/OFFSITE) ──────────
                 var toErase = new List<ObjectId>();
                 foreach (ObjectId oid in modelSpace)
                 {
                     if (!oid.ObjectClass.IsDerivedFrom(RXObject.GetClass(typeof(Polyline))))
                         continue;
                     Polyline pline = (Polyline)tr.GetObject(oid, OpenMode.ForRead);
-                    ResultBuffer? rb = pline.GetXDataForApplication(BasinSplitAppName);
+                    ResultBuffer? rb = pline.GetXDataForApplication(AppNameBasin);
                     if (rb != null)
                     {
+                        TypedValue[] values = rb.AsArray();
+                        // Check if Boundary (index 2) is ONSITE or OFFSITE
+                        if (values.Length > 2 && values[2].TypeCode == (int)DxfCode.ExtendedDataAsciiString)
+                        {
+                            string? boundary = values[2].Value?.ToString();
+                            if (boundary == OnsiteLabel || boundary == OffsiteLabel)
+                            {
+                                toErase.Add(oid);
+                            }
+                        }
                         rb.Dispose();
-                        toErase.Add(oid);
                     }
                 }
 
@@ -211,23 +211,17 @@ namespace C3DTools.Commands
                 modelSpace.AppendEntity(newPline);
                 tr.AddNewlyCreatedDBObject(newPline, true);
 
-                // Tag with parent basin ID under C3DTools_Basin (same schema as TAGBASIN)
-                // so GETBASIN works on split pieces and the parent ID is always readable.
+                // Tag with basin ID and Boundary attribute using new structure
+                // [AppName, BasinId, Boundary, Development]
+                string boundary = splitLabel; // "ONSITE" or "OFFSITE"
                 ResultBuffer rbBasin = new ResultBuffer(
                     new TypedValue((int)DxfCode.ExtendedDataRegAppName, AppNameBasin),
-                    new TypedValue((int)DxfCode.ExtendedDataAsciiString, basinId)
+                    new TypedValue((int)DxfCode.ExtendedDataAsciiString, basinId),
+                    new TypedValue((int)DxfCode.ExtendedDataAsciiString, boundary),
+                    new TypedValue((int)DxfCode.ExtendedDataAsciiString, "") // Development (empty)
                 );
                 newPline.XData = rbBasin;
                 rbBasin.Dispose();
-
-                // Tag with split classification: [basinId, "ONSITE" | "OFFSITE"]
-                ResultBuffer rb = new ResultBuffer(
-                    new TypedValue((int)DxfCode.ExtendedDataRegAppName, BasinSplitAppName),
-                    new TypedValue((int)DxfCode.ExtendedDataAsciiString, basinId),
-                    new TypedValue((int)DxfCode.ExtendedDataAsciiString, splitLabel)
-                );
-                newPline.XData = rb;
-                rb.Dispose();
 
                 count++;
             }
