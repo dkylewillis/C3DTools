@@ -1,10 +1,12 @@
 using Autodesk.AutoCAD.ApplicationServices;
+using Autodesk.AutoCAD.DatabaseServices;
 using C3DTools.Models;
 using C3DTools.Services;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Windows;
 using System.Windows.Input;
 
 namespace C3DTools.ViewModels
@@ -15,6 +17,9 @@ namespace C3DTools.ViewModels
     public class BasinPaletteViewModel : INotifyPropertyChanged
     {
         private readonly BasinDataService _dataService;
+        private readonly GlobalSettingsService _globalSettings = new GlobalSettingsService();
+        private readonly DrawingSettingsService _drawingSettings = new DrawingSettingsService();
+
         private BasinInfo? _selectedBasin;
         private BasinInfo? _selectedTaggedBasin;
         private BasinInfo? _selectedUntaggedBasin;
@@ -24,6 +29,13 @@ namespace C3DTools.ViewModels
         private string _selectedLayer = "All Layers";
         private List<BasinInfo> _allUntaggedBasins = new List<BasinInfo>();
 
+        // Settings fields
+        private string _onsiteLayer = "CALC-BASN-ONSITE";
+        private string _offsiteLayer = "CALC-BASN-OFFSITE";
+        private string _newLayerPattern = string.Empty;
+        private string? _selectedLayerPattern;
+        private AreaUnit _areaUnit = AreaUnit.SquareFeet;
+
         public BasinPaletteViewModel()
         {
             _dataService = new BasinDataService();
@@ -32,11 +44,25 @@ namespace C3DTools.ViewModels
             AvailableLayers = new ObservableCollection<string>();
             BoundaryOptions = new ObservableCollection<string> { "", "ONSITE", "OFFSITE" };
             DevelopmentOptions = new ObservableCollection<string> { "", "Pre", "Post" };
+            LanduseHatchLayers = new ObservableCollection<string>();
 
             TagBasinCommand = new RelayCommand(ExecuteTagBasin, CanExecuteTagBasin);
             SelectBasinItemCommand = new RelayCommand<BasinInfo>(ExecuteSelectBasinItem);
             RefreshCommand = new RelayCommand(ExecuteRefresh);
 
+            AddLayerPatternCommand = new RelayCommand(ExecuteAddLayerPattern, () => !string.IsNullOrWhiteSpace(_newLayerPattern));
+            RemoveLayerPatternCommand = new RelayCommand(ExecuteRemoveLayerPattern, () => _selectedLayerPattern != null);
+            SaveToDrawingCommand = new RelayCommand(ExecuteSaveToDrawing);
+            SaveAsDefaultCommand = new RelayCommand(ExecuteSaveAsDefault);
+            SaveToDrawingAndSetAsDefaultCommand = new RelayCommand(ExecuteSaveToDrawingAndSetAsDefault);
+            RunBasinLanduseCommand = new RelayCommand(ExecuteRunBasinLanduse);
+            RunSplitBasinsCommand = new RelayCommand(ExecuteRunSplitBasins);
+
+            // Subscribe to document activation to reload settings when the user switches drawings
+            Application.DocumentManager.DocumentActivated += OnDocumentActivated;
+            Application.DocumentManager.DocumentCreated += OnDocumentActivated;
+
+            LoadSettingsForActiveDocument();
             RefreshData();
         }
 
@@ -47,6 +73,71 @@ namespace C3DTools.ViewModels
         public ObservableCollection<string> AvailableLayers { get; }
         public ObservableCollection<string> BoundaryOptions { get; }
         public ObservableCollection<string> DevelopmentOptions { get; }
+
+        // ── Settings ──────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Layer name patterns used to auto-collect hatches in BASINLANDUSE.
+        /// Supports wildcards (* and ?).
+        /// </summary>
+        public ObservableCollection<string> LanduseHatchLayers { get; }
+
+        public string OnsiteLayer
+        {
+            get => _onsiteLayer;
+            set { _onsiteLayer = value; OnPropertyChanged(); PushToCache(); }
+        }
+
+        public string OffsiteLayer
+        {
+            get => _offsiteLayer;
+            set { _offsiteLayer = value; OnPropertyChanged(); PushToCache(); }
+        }
+
+        public string NewLayerPattern
+        {
+            get => _newLayerPattern;
+            set
+            {
+                _newLayerPattern = value;
+                OnPropertyChanged();
+                ((RelayCommand)AddLayerPatternCommand).RaiseCanExecuteChanged();
+            }
+        }
+
+        public string? SelectedLayerPattern
+        {
+            get => _selectedLayerPattern;
+            set
+            {
+                _selectedLayerPattern = value;
+                OnPropertyChanged();
+                ((RelayCommand)RemoveLayerPatternCommand).RaiseCanExecuteChanged();
+            }
+        }
+
+        public ICommand AddLayerPatternCommand { get; }
+        public ICommand RemoveLayerPatternCommand { get; }
+        public ICommand SaveToDrawingCommand { get; }
+        public ICommand SaveAsDefaultCommand { get; }
+        public ICommand SaveToDrawingAndSetAsDefaultCommand { get; }
+        public ICommand RunBasinLanduseCommand { get; }
+        public ICommand RunSplitBasinsCommand { get; }
+
+        public ObservableCollection<string> AreaUnitOptions { get; } = new ObservableCollection<string> { "Square Feet", "Acres" };
+
+        public string SelectedAreaUnit
+        {
+            get => _areaUnit == AreaUnit.Acres ? "Acres" : "Square Feet";
+            set
+            {
+                _areaUnit = value == "Acres" ? AreaUnit.Acres : AreaUnit.SquareFeet;
+                OnPropertyChanged();
+                PushToCache();
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────────────────────
 
         public string SelectedLayer
         {
@@ -283,6 +374,99 @@ namespace C3DTools.ViewModels
         {
             RefreshData();
         }
+
+        // ── Settings helpers ─────────────────────────────────────────────────────
+
+        private void LoadSettingsForActiveDocument()
+        {
+            var doc = Application.DocumentManager.MdiActiveDocument;
+            BasinSettings settings = doc != null
+                ? new SettingsResolver().Resolve(doc.Database)
+                : _globalSettings.Load();
+
+            OnsiteLayer = settings.OnsiteLayer;
+            OffsiteLayer = settings.OffsiteLayer;
+            _areaUnit = settings.AreaUnit;
+            OnPropertyChanged(nameof(SelectedAreaUnit));
+            LanduseHatchLayers.Clear();
+            foreach (string p in settings.LanduseHatchLayers)
+                LanduseHatchLayers.Add(p);
+
+            PushToCache();
+        }
+
+        private void OnDocumentActivated(object sender, DocumentCollectionEventArgs e)
+        {
+            LoadSettingsForActiveDocument();
+        }
+
+        private BasinSettings BuildSettingsFromUi() => new BasinSettings
+        {
+            OnsiteLayer = OnsiteLayer,
+            OffsiteLayer = OffsiteLayer,
+            LanduseHatchLayers = new List<string>(LanduseHatchLayers),
+            AreaUnit = _areaUnit
+        };
+
+        private void ExecuteAddLayerPattern()
+        {
+            string pattern = _newLayerPattern.Trim();
+            if (!string.IsNullOrEmpty(pattern) && !LanduseHatchLayers.Contains(pattern))
+                LanduseHatchLayers.Add(pattern);
+            NewLayerPattern = string.Empty;
+            PushToCache();
+        }
+
+        private void ExecuteRemoveLayerPattern()
+        {
+            if (_selectedLayerPattern != null)
+                LanduseHatchLayers.Remove(_selectedLayerPattern);
+            PushToCache();
+        }
+
+        private void ExecuteSaveToDrawing()
+        {
+            var doc = Application.DocumentManager.MdiActiveDocument;
+            if (doc == null) return;
+            _drawingSettings.Save(doc.Database, BuildSettingsFromUi());
+            doc.Editor.WriteMessage("\nBasin settings saved to drawing.");
+        }
+
+        private void ExecuteSaveAsDefault()
+        {
+            _globalSettings.Save(BuildSettingsFromUi());
+            var doc = Application.DocumentManager.MdiActiveDocument;
+            doc?.Editor.WriteMessage("\nBasin settings saved as global default.");
+        }
+
+        private void ExecuteSaveToDrawingAndSetAsDefault()
+        {
+            var doc = Application.DocumentManager.MdiActiveDocument;
+            BasinSettings s = BuildSettingsFromUi();
+            if (doc != null)
+                _drawingSettings.Save(doc.Database, s);
+            _globalSettings.Save(s);
+            doc?.Editor.WriteMessage("\nBasin settings saved to drawing and set as global default.");
+        }
+
+        private void PushToCache()
+        {
+            SettingsCache.Set(BuildSettingsFromUi());
+        }
+
+        private void ExecuteRunBasinLanduse()
+        {
+            var doc = Application.DocumentManager.MdiActiveDocument;
+            doc?.SendStringToExecute("BASINLANDUSE\n", true, false, false);
+        }
+
+        private void ExecuteRunSplitBasins()
+        {
+            var doc = Application.DocumentManager.MdiActiveDocument;
+            doc?.SendStringToExecute("SPLITBASINS\n", true, false, false);
+        }
+
+        // ─────────────────────────────────────────────────────────────────────────
 
         protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
         {

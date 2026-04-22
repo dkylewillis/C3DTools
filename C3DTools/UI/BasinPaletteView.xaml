@@ -28,12 +28,15 @@
         </Style>
     </UserControl.Resources>
 
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
     <Grid Margin="8">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
@@ -241,11 +244,83 @@
                        Margin="0,4,0,0" Foreground="Gray" FontSize="11"/>
         </StackPanel>
 
+        <!-- Settings Section -->
+        <Expander Grid.Row="4" Header="Settings" Margin="0,12,0,0" IsExpanded="True">
+            <StackPanel Margin="4,8,4,4">
+
+                <!-- Split Basins Layers -->
+                <TextBlock Text="Split Basins Layers" FontWeight="Bold" FontSize="13" Margin="0,0,0,6"/>
+
+                <TextBlock Text="Onsite Layer:" FontWeight="SemiBold" Margin="0,0,0,2"/>
+                <TextBox Text="{Binding OnsiteLayer, UpdateSourceTrigger=PropertyChanged}"
+                         Padding="4" Margin="0,0,0,8"/>
+
+                <TextBlock Text="Offsite Layer:" FontWeight="SemiBold" Margin="0,0,0,2"/>
+                <TextBox Text="{Binding OffsiteLayer, UpdateSourceTrigger=PropertyChanged}"
+                         Padding="4" Margin="0,0,0,12"/>
+
+                <!-- Landuse Area Unit -->
+                <TextBlock Text="Landuse Area Unit" FontWeight="Bold" FontSize="13" Margin="0,0,0,4"/>
+                <ComboBox ItemsSource="{Binding AreaUnitOptions}"
+                          SelectedItem="{Binding SelectedAreaUnit, Mode=TwoWay}"
+                          Margin="0,0,0,12"/>
+
+                <!-- Landuse Hatch Layers -->
+                <TextBlock Text="Landuse Hatch Layers" FontWeight="Bold" FontSize="13" Margin="0,0,0,4"/>
+                <TextBlock Text="Wildcards supported: e.g.  LU-*,  *HATCH*"
+                           FontStyle="Italic" FontSize="10" Foreground="Gray" Margin="0,0,0,6"/>
+
+                <ListBox ItemsSource="{Binding LanduseHatchLayers}"
+                         SelectedItem="{Binding SelectedLayerPattern, Mode=TwoWay}"
+                         MinHeight="60" MaxHeight="150"
+                         BorderThickness="1" BorderBrush="#CCCCCC"
+                         Margin="0,0,0,4"/>
+
+                <!-- Add pattern row -->
+                <DockPanel Margin="0,0,0,4">
+                    <Button Content="Add" DockPanel.Dock="Right"
+                            Command="{Binding AddLayerPatternCommand}"
+                            Padding="8,4" Margin="4,0,0,0"/>
+                    <TextBox Text="{Binding NewLayerPattern, UpdateSourceTrigger=PropertyChanged}"
+                             Padding="4"
+                             ToolTip="Enter a layer name or wildcard pattern (e.g. LU-*)"/>
+                </DockPanel>
+
+                <Button Content="Remove Selected"
+                        Command="{Binding RemoveLayerPatternCommand}"
+                        HorizontalAlignment="Left"
+                        Padding="8,4" Margin="0,0,0,12"/>
+
+                <!-- Save buttons -->
+                <Button Content="Save to Drawing"
+                        Command="{Binding SaveToDrawingCommand}"
+                        HorizontalAlignment="Stretch" Margin="0,0,0,4"/>
+                <Button Content="Save as Default"
+                        Command="{Binding SaveAsDefaultCommand}"
+                        HorizontalAlignment="Stretch" Margin="0,0,0,4"/>
+                <Button Content="Save to Drawing &amp; Set as Default"
+                        Command="{Binding SaveToDrawingAndSetAsDefaultCommand}"
+                        HorizontalAlignment="Stretch" Margin="0,0,0,0"/>
+            </StackPanel>
+        </Expander>
+
+        <!-- Commands Section -->
+        <StackPanel Grid.Row="5" Margin="0,12,0,0">
+            <TextBlock Text="Commands" FontWeight="Bold" FontSize="14" Margin="0,0,0,8"/>
+            <Button Content="Run BASINLANDUSE"
+                    Command="{Binding RunBasinLanduseCommand}"
+                    HorizontalAlignment="Stretch" Margin="0,0,0,4"/>
+            <Button Content="Run SPLITBASINS"
+                    Command="{Binding RunSplitBasinsCommand}"
+                    HorizontalAlignment="Stretch" Margin="0,0,0,4"/>
+        </StackPanel>
+
         <!-- Info Section -->
-        <StackPanel Grid.Row="4" Margin="0,16,0,0">
+        <StackPanel Grid.Row="6" Margin="0,12,0,0">
             <TextBlock TextWrapping="Wrap" FontSize="10" Foreground="Gray">
-                <Run Text="Tip: Use TAGBASIN, GETBASIN, LABELBASIN, and SPLITBASINS commands for additional operations."/>
+                <Run Text="Tip: Use TAGBASIN, GETBASIN, LABELBASIN commands for additional operations."/>
             </TextBlock>
         </StackPanel>
     </Grid>
+    </ScrollViewer>
 </UserControl>

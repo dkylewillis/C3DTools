@@ -3,6 +3,7 @@ using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Runtime;
 using C3DTools.Helpers;
+using C3DTools.Services;
 using NetTopologySuite.Geometries;
 using System.Collections.Generic;
 
@@ -13,8 +14,6 @@ namespace C3DTools.Commands
         private const string AppNameBasin = "C3DTools_Basin";
         private const string OnsiteLabel = "ONSITE";
         private const string OffsiteLabel = "OFFSITE";
-        private const string OnsiteLayer = "CALC-BASN-ONSITE";
-        private const string OffsiteLayer = "CALC-BASN-OFFSITE";
 
         [CommandMethod("SPLITBASINS")]
         public void SplitBasins()
@@ -22,6 +21,11 @@ namespace C3DTools.Commands
             Document doc = Application.DocumentManager.MdiActiveDocument;
             Database db = doc.Database;
             Editor ed = doc.Editor;
+
+            // Load settings (drawing-level overrides global defaults)
+            var settings = new SettingsResolver().Resolve(db);
+            string onsiteLayer = settings.OnsiteLayer;
+            string offsiteLayer = settings.OffsiteLayer;
 
             // ── 1. Collect all C3DTools_Basin-tagged closed polylines ───────────────
             var taggedBasins = new List<(ObjectId id, string basinId, string development)>();
@@ -104,8 +108,8 @@ namespace C3DTools.Commands
                 }
 
                 // ── 3b. Ensure layers exist ────────────────────────────────────
-                EnsureLayer(OnsiteLayer, 3, tr, db);   // 3 = green
-                EnsureLayer(OffsiteLayer, 1, tr, db);  // 1 = red
+                EnsureLayer(onsiteLayer, 3, tr, db);   // 3 = green
+                EnsureLayer(offsiteLayer, 1, tr, db);  // 1 = red
 
                 // ── 3c. Erase existing split basin polylines (Boundary = ONSITE/OFFSITE) ──────────
                 var toErase = new List<ObjectId>();
@@ -171,12 +175,12 @@ namespace C3DTools.Commands
                     // Intersection → onsite
                     Geometry onsiteGeom = BooleanOperationHelper.Intersect(basinGeom, siteGeom);
                     if (!onsiteGeom.IsEmpty)
-                        onsiteCount += CreateSplitPolylines(onsiteGeom, basinId, OnsiteLabel, OnsiteLayer, development, modelSpace, tr, db);
+                        onsiteCount += CreateSplitPolylines(onsiteGeom, basinId, OnsiteLabel, onsiteLayer, development, modelSpace, tr, db);
 
                     // Difference → offsite
                     Geometry offsiteGeom = BooleanOperationHelper.Difference(basinGeom, siteGeom);
                     if (!offsiteGeom.IsEmpty)
-                        offsiteCount += CreateSplitPolylines(offsiteGeom, basinId, OffsiteLabel, OffsiteLayer, development, modelSpace, tr, db);
+                        offsiteCount += CreateSplitPolylines(offsiteGeom, basinId, OffsiteLabel, offsiteLayer, development, modelSpace, tr, db);
                 }
 
                 tr.Commit();

@@ -3,6 +3,7 @@ using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Runtime;
 using C3DTools.Helpers;
+using C3DTools.Services;
 using NetTopologySuite.Geometries;
 using System.Collections.Generic;
 using System.Linq;
@@ -68,22 +69,53 @@ namespace C3DTools.Commands
 
             ed.WriteMessage($"\nFound {polylineRows.Count} basin polyline(s).");
 
-            // Step 2: Select hatches
-            PromptSelectionOptions pso = new PromptSelectionOptions();
-            pso.MessageForAdding = "\nSelect hatches: ";
+            // Step 2: Auto-collect hatches by configured layer patterns
+            var resolver = new SettingsResolver();
+            var settings = resolver.Resolve(db);
 
-            SelectionFilter filter = new SelectionFilter(new TypedValue[] {
-                new TypedValue((int)DxfCode.Start, "HATCH")
-            });
-
-            PromptSelectionResult psr = ed.GetSelection(pso, filter);
-            if (psr.Status != PromptStatus.OK)
+            if (settings.LanduseHatchLayers.Count == 0)
             {
-                ed.WriteMessage("\nNo hatches selected.");
+                ed.WriteMessage("\nNo landuse hatch layers configured. Open the Basin Tools palette and add layer patterns under Settings.");
                 return;
             }
 
-            ObjectId[] hatchIds = psr.Value.GetObjectIds();
+            var matchedLayers = LayerMatcher.GetMatchingLayers(db, settings.LanduseHatchLayers, out var unmatchedPatterns);
+
+            foreach (string pattern in unmatchedPatterns)
+                ed.WriteMessage($"\nWarning: Layer pattern '{pattern}' matched no layers in this drawing.");
+
+            if (matchedLayers.Count == 0)
+            {
+                ed.WriteMessage("\nNo layers matched the configured patterns. Command cancelled.");
+                return;
+            }
+
+            var matchedLayerSet = new HashSet<string>(matchedLayers, System.StringComparer.OrdinalIgnoreCase);
+            var hatchIds = new List<ObjectId>();
+
+            using (Transaction tr = db.TransactionManager.StartTransaction())
+            {
+                BlockTable bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+                BlockTableRecord ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+
+                foreach (ObjectId oid in ms)
+                {
+                    if (!oid.ObjectClass.IsDerivedFrom(RXObject.GetClass(typeof(Hatch))))
+                        continue;
+                    Hatch? hatch = tr.GetObject(oid, OpenMode.ForRead) as Hatch;
+                    if (hatch != null && matchedLayerSet.Contains(hatch.Layer ?? "0"))
+                        hatchIds.Add(oid);
+                }
+                tr.Commit();
+            }
+
+            if (hatchIds.Count == 0)
+            {
+                ed.WriteMessage($"\nNo hatches found on matched layers ({string.Join(", ", matchedLayers)}). Command cancelled.");
+                return;
+            }
+
+            ed.WriteMessage($"\nAuto-collected {hatchIds.Count} hatch(es) from {matchedLayers.Count} layer(s).");
 
             // Step 3: Convert hatches to NTS geometries
             var hatchGeoms = new List<(Geometry Geom, string Layer)>();
@@ -167,6 +199,12 @@ namespace C3DTools.Commands
             const string boundaryHeader = "Boundary";
             const string developmentHeader = "Development";
 
+            // Area unit conversion
+            bool toAcres = settings.AreaUnit == Models.AreaUnit.Acres;
+            const double SqFtPerAcre = 43560.0;
+            string areaUnitLabel = toAcres ? "ac" : "sf";
+            double ConvertArea(double sf) => toAcres ? sf / SqFtPerAcre : sf;
+
             // Check if we have any basins with Boundary or Development attributes
             bool hasBoundary = polylineRows.Any(r => !string.IsNullOrEmpty(r.Boundary));
             bool hasDevelopment = polylineRows.Any(r => !string.IsNullOrEmpty(r.Development));
@@ -224,6 +262,11 @@ namespace C3DTools.Commands
 
             var allColumns = new List<string>(allLayers) { "Total" };
 
+            // Append unit label to each layer column header and Total
+            var columnLabels = new Dictionary<string, string>();
+            foreach (string col in allColumns)
+                columnLabels[col] = $"{col} ({areaUnitLabel})";
+
             // Column widths for aligned monospace display
             int idWidth = basinOrder.Concat(new[] { "id" }).Max(s => s.Length);
             int boundaryWidth = hasBoundary
@@ -235,13 +278,13 @@ namespace C3DTools.Commands
 
             var colWidths = new Dictionary<string, int>();
             foreach (string col in allColumns)
-                colWidths[col] = col.Length;
+                colWidths[col] = columnLabels[col].Length;
             for (int i = 0; i < displayRows.Count; i++)
             {
                 foreach (string layer in allLayers)
                     if (displayRows[i].Areas.TryGetValue(layer, out double a))
-                        colWidths[layer] = System.Math.Max(colWidths[layer], a.ToString(areaFmt).Length);
-                colWidths["Total"] = System.Math.Max(colWidths["Total"], rowTotals[i].ToString(areaFmt).Length);
+                        colWidths[layer] = System.Math.Max(colWidths[layer], ConvertArea(a).ToString(areaFmt).Length);
+                colWidths["Total"] = System.Math.Max(colWidths["Total"], ConvertArea(rowTotals[i]).ToString(areaFmt).Length);
             }
 
             // Space-padded display text
@@ -252,7 +295,7 @@ namespace C3DTools.Commands
             if (hasDevelopment)
                 displaySb.Append("  " + developmentHeader.PadRight(developmentWidth));
             foreach (string col in allColumns)
-                displaySb.Append("  " + col.PadLeft(colWidths[col]));
+                displaySb.Append("  " + columnLabels[col].PadLeft(colWidths[col]));
             displaySb.AppendLine();
             displaySb.Append(new string('-', idWidth));
             if (hasBoundary)
@@ -274,10 +317,10 @@ namespace C3DTools.Commands
                     displaySb.Append("  " + (development ?? "").PadRight(developmentWidth));
                 foreach (string layer in allLayers)
                 {
-                    string cell = areas.TryGetValue(layer, out double a) ? a.ToString(areaFmt) : "";
+                    string cell = areas.TryGetValue(layer, out double a) ? ConvertArea(a).ToString(areaFmt) : "";
                     displaySb.Append("  " + cell.PadLeft(colWidths[layer]));
                 }
-                displaySb.Append("  " + rowTotals[i].ToString(areaFmt).PadLeft(colWidths["Total"]));
+                displaySb.Append("  " + ConvertArea(rowTotals[i]).ToString(areaFmt).PadLeft(colWidths["Total"]));
                 displaySb.AppendLine();
 
                 // Blank line after each basin's last row
@@ -292,7 +335,7 @@ namespace C3DTools.Commands
             clipSb.Append("id");
             if (hasBoundary) { clipSb.Append("\t"); clipSb.Append(boundaryHeader); }
             if (hasDevelopment) { clipSb.Append("\t"); clipSb.Append(developmentHeader); }
-            foreach (string col in allColumns) { clipSb.Append("\t"); clipSb.Append(col); }
+            foreach (string col in allColumns) { clipSb.Append("\t"); clipSb.Append(columnLabels[col]); }
             clipSb.AppendLine();
 
             for (int i = 0; i < displayRows.Count; i++)
@@ -309,10 +352,10 @@ namespace C3DTools.Commands
                 {
                     clipSb.Append("\t");
                     if (areas.TryGetValue(layer, out double ea))
-                        clipSb.Append(ea.ToString(areaFmt));
+                        clipSb.Append(ConvertArea(ea).ToString(areaFmt));
                 }
                 clipSb.Append("\t");
-                clipSb.Append(rowTotals[i].ToString(areaFmt));
+                clipSb.Append(ConvertArea(rowTotals[i]).ToString(areaFmt));
                 clipSb.AppendLine();
             }
 
