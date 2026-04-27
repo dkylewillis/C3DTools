@@ -23,6 +23,7 @@ namespace C3DTools.ViewModels
         private BasinInfo? _selectedBasin;
         private BasinInfo? _selectedTaggedBasin;
         private BasinInfo? _selectedUntaggedBasin;
+        private bool _suppressSelectionSync;
         private string _newBasinId = string.Empty;
         private string _selectedBoundary = "None";
         private string _selectedDevelopment = string.Empty;
@@ -35,6 +36,9 @@ namespace C3DTools.ViewModels
         private string _newLayerPattern = string.Empty;
         private string? _selectedLayerPattern;
         private AreaUnit _areaUnit = AreaUnit.SquareFeet;
+        private string _activeTab = "Basins";
+        private string _landuseLayerFilter = string.Empty;
+        private ObservableCollection<LanduseLayerItem> _allLanduseLayers = new ObservableCollection<LanduseLayerItem>();
 
         public BasinPaletteViewModel()
         {
@@ -57,6 +61,13 @@ namespace C3DTools.ViewModels
             SaveToDrawingAndSetAsDefaultCommand = new RelayCommand(ExecuteSaveToDrawingAndSetAsDefault);
             RunBasinLanduseCommand = new RelayCommand(ExecuteRunBasinLanduse);
             RunSplitBasinsCommand = new RelayCommand(ExecuteRunSplitBasins);
+            GetBasinCommand = new RelayCommand(ExecuteGetBasin);
+            LabelBasinCommand = new RelayCommand(ExecuteLabelBasin);
+            SwitchTabCommand = new RelayCommand<string>(ExecuteSwitchTab);
+            RefreshLandusesCommand = new RelayCommand(ExecuteRefreshLanduses);
+            ClearLanduseSelectionsCommand = new RelayCommand(ExecuteClearLanduseSelections);
+
+            FilteredLanduseLayers = new ObservableCollection<LanduseLayerItem>();
 
             // Subscribe to document activation to reload settings when the user switches drawings
             Application.DocumentManager.DocumentActivated += OnDocumentActivated;
@@ -123,8 +134,38 @@ namespace C3DTools.ViewModels
         public ICommand SaveToDrawingAndSetAsDefaultCommand { get; }
         public ICommand RunBasinLanduseCommand { get; }
         public ICommand RunSplitBasinsCommand { get; }
+        public ICommand GetBasinCommand { get; }
+        public ICommand LabelBasinCommand { get; }
+        public ICommand SwitchTabCommand { get; }
+        public ICommand RefreshLandusesCommand { get; }
+        public ICommand ClearLanduseSelectionsCommand { get; }
 
         public ObservableCollection<string> AreaUnitOptions { get; } = new ObservableCollection<string> { "Square Feet", "Acres" };
+
+        public ObservableCollection<LanduseLayerItem> FilteredLanduseLayers { get; }
+
+        public string ActiveTab
+        {
+            get => _activeTab;
+            set
+            {
+                _activeTab = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public string LanduseLayerFilter
+        {
+            get => _landuseLayerFilter;
+            set
+            {
+                _landuseLayerFilter = value;
+                OnPropertyChanged();
+                FilterLanduseLayers();
+            }
+        }
+
+        public int SelectedLanduseCount => _allLanduseLayers.Count(l => l.IsSelected);
 
         public string SelectedAreaUnit
         {
@@ -221,8 +262,25 @@ namespace C3DTools.ViewModels
             get => _selectedTaggedBasin;
             set
             {
+                if (_selectedTaggedBasin == value) return;
                 _selectedTaggedBasin = value;
                 OnPropertyChanged();
+
+                if (value != null && !_suppressSelectionSync)
+                {
+                    _suppressSelectionSync = true;
+                    try
+                    {
+                        var doc = Application.DocumentManager.MdiActiveDocument;
+                        if (doc != null)
+                            _dataService.SelectBasin(doc, value.ObjectId);
+                        SelectedBasin = value;
+                    }
+                    finally
+                    {
+                        _suppressSelectionSync = false;
+                    }
+                }
             }
         }
 
@@ -231,8 +289,25 @@ namespace C3DTools.ViewModels
             get => _selectedUntaggedBasin;
             set
             {
+                if (_selectedUntaggedBasin == value) return;
                 _selectedUntaggedBasin = value;
                 OnPropertyChanged();
+
+                if (value != null && !_suppressSelectionSync)
+                {
+                    _suppressSelectionSync = true;
+                    try
+                    {
+                        var doc = Application.DocumentManager.MdiActiveDocument;
+                        if (doc != null)
+                            _dataService.SelectBasin(doc, value.ObjectId);
+                        SelectedBasin = value;
+                    }
+                    finally
+                    {
+                        _suppressSelectionSync = false;
+                    }
+                }
             }
         }
 
@@ -326,6 +401,33 @@ namespace C3DTools.ViewModels
 
             var selectedBasin = _dataService.GetSelectedBasin(doc);
             SelectedBasin = selectedBasin;
+
+            if (_suppressSelectionSync) return;
+            _suppressSelectionSync = true;
+            try
+            {
+                if (selectedBasin?.IsTagged == true)
+                {
+                    var match = TaggedBasins.FirstOrDefault(b => b.ObjectId == selectedBasin.ObjectId);
+                    SelectedTaggedBasin = match;
+                    SelectedUntaggedBasin = null;
+                }
+                else if (selectedBasin != null)
+                {
+                    var match = UntaggedBasins.FirstOrDefault(b => b.ObjectId == selectedBasin.ObjectId);
+                    SelectedUntaggedBasin = match;
+                    SelectedTaggedBasin = null;
+                }
+                else
+                {
+                    SelectedTaggedBasin = null;
+                    SelectedUntaggedBasin = null;
+                }
+            }
+            finally
+            {
+                _suppressSelectionSync = false;
+            }
         }
 
         private bool CanExecuteTagBasin()
@@ -466,6 +568,169 @@ namespace C3DTools.ViewModels
             doc?.SendStringToExecute("SPLITBASINS\n", true, false, false);
         }
 
+        private void ExecuteGetBasin()
+        {
+            var doc = Application.DocumentManager.MdiActiveDocument;
+            doc?.SendStringToExecute("GETBASIN\n", true, false, false);
+        }
+
+        private void ExecuteLabelBasin()
+        {
+            var doc = Application.DocumentManager.MdiActiveDocument;
+            doc?.SendStringToExecute("LABELBASIN\n", true, false, false);
+        }
+
+        private void ExecuteSwitchTab(string? tabName)
+        {
+            if (!string.IsNullOrEmpty(tabName))
+            {
+                ActiveTab = tabName;
+                if (tabName == "Landuses")
+                {
+                    RefreshLanduseLayers();
+                }
+            }
+        }
+
+        private void ExecuteRefreshLanduses()
+        {
+            RefreshLanduseLayers();
+        }
+
+        private void ExecuteClearLanduseSelections()
+        {
+            // Temporarily unsubscribe from IsSelected changes to avoid saving one by one
+            foreach (var layer in _allLanduseLayers)
+            {
+                layer.IsSelected = false;
+            }
+            LanduseHatchLayers.Clear();
+            PushToCache();
+            SaveLanduseSelectionsToDrawing();
+            OnPropertyChanged(nameof(SelectedLanduseCount));
+        }
+
+        private void RefreshLanduseLayers()
+        {
+            var doc = Application.DocumentManager.MdiActiveDocument;
+            if (doc == null) return;
+
+            _allLanduseLayers.Clear();
+
+            using (var tr = doc.TransactionManager.StartTransaction())
+            {
+                var lt = (LayerTable)tr.GetObject(doc.Database.LayerTableId, OpenMode.ForRead);
+                var bt = (BlockTable)tr.GetObject(doc.Database.BlockTableId, OpenMode.ForRead);
+                var modelSpace = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+
+                // Count hatches per layer
+                var hatchCounts = new System.Collections.Generic.Dictionary<string, int>();
+
+                foreach (ObjectId objId in modelSpace)
+                {
+                    var obj = tr.GetObject(objId, OpenMode.ForRead);
+                    if (obj is Hatch hatch)
+                    {
+                        string layerName = hatch.Layer;
+                        if (!hatchCounts.ContainsKey(layerName))
+                            hatchCounts[layerName] = 0;
+                        hatchCounts[layerName]++;
+                    }
+                }
+
+                // Create layer items
+                foreach (ObjectId layerId in lt)
+                {
+                    var ltr = (LayerTableRecord)tr.GetObject(layerId, OpenMode.ForRead);
+                    string layerName = ltr.Name;
+                    int hatchCount = hatchCounts.ContainsKey(layerName) ? hatchCounts[layerName] : 0;
+
+                    var item = new LanduseLayerItem
+                    {
+                        LayerName = layerName,
+                        HatchCount = hatchCount,
+                        IsSelected = false // Will be set below
+                    };
+
+                    // Check if this layer matches any pattern in LanduseHatchLayers
+                    foreach (var pattern in LanduseHatchLayers)
+                    {
+                        if (LayerMatchesPattern(layerName, pattern))
+                        {
+                            item.IsSelected = true;
+                            break;
+                        }
+                    }
+
+                    item.PropertyChanged += (s, e) =>
+                    {
+                        if (e.PropertyName == nameof(LanduseLayerItem.IsSelected))
+                        {
+                            OnPropertyChanged(nameof(SelectedLanduseCount));
+                            SyncLanduseLayerToSettings(item.LayerName, item.IsSelected);
+                        }
+                    };
+
+                    _allLanduseLayers.Add(item);
+                }
+
+                tr.Commit();
+            }
+
+            FilterLanduseLayers();
+        }
+
+        private void SyncLanduseLayerToSettings(string layerName, bool isSelected)
+        {
+            if (isSelected)
+            {
+                if (!LanduseHatchLayers.Contains(layerName))
+                    LanduseHatchLayers.Add(layerName);
+            }
+            else
+            {
+                LanduseHatchLayers.Remove(layerName);
+            }
+            PushToCache();
+            SaveLanduseSelectionsToDrawing();
+        }
+
+        private void SaveLanduseSelectionsToDrawing()
+        {
+            var doc = Application.DocumentManager.MdiActiveDocument;
+            if (doc == null) return;
+            try
+            {
+                _drawingSettings.Save(doc.Database, BuildSettingsFromUi());
+            }
+            catch { }
+        }
+
+        private void FilterLanduseLayers()
+        {
+            FilteredLanduseLayers.Clear();
+
+            var filtered = string.IsNullOrWhiteSpace(_landuseLayerFilter)
+                ? _allLanduseLayers
+                : _allLanduseLayers.Where(l => l.LayerName.Contains(_landuseLayerFilter, System.StringComparison.OrdinalIgnoreCase));
+
+            foreach (var layer in filtered)
+            {
+                FilteredLanduseLayers.Add(layer);
+            }
+        }
+
+        private bool LayerMatchesPattern(string layerName, string pattern)
+        {
+            // Simple wildcard matching: * and ?
+            var regex = new System.Text.RegularExpressions.Regex(
+                "^" + System.Text.RegularExpressions.Regex.Escape(pattern)
+                    .Replace("\\*", ".*")
+                    .Replace("\\?", ".") + "$",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            return regex.IsMatch(layerName);
+        }
+
         // ─────────────────────────────────────────────────────────────────────────
 
         protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
@@ -518,5 +783,36 @@ namespace C3DTools.ViewModels
         public void Execute(object? parameter) => _execute((T?)parameter);
 
         public void RaiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Represents a layer item in the landuse layers list with hatch count and selection state.
+    /// </summary>
+    public class LanduseLayerItem : INotifyPropertyChanged
+    {
+        private bool _isSelected;
+
+        public string LayerName { get; set; } = string.Empty;
+        public int HatchCount { get; set; }
+
+        public bool IsSelected
+        {
+            get => _isSelected;
+            set
+            {
+                if (_isSelected != value)
+                {
+                    _isSelected = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
     }
 }

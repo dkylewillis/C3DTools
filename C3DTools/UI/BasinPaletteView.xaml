@@ -1,326 +1,816 @@
 <UserControl x:Class="C3DTools.UI.BasinPaletteView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:local="clr-namespace:C3DTools.UI"
-             mc:Ignorable="d" 
-             d:DesignHeight="600" d:DesignWidth="320"
-             Background="White">
+             mc:Ignorable="d"
+             d:DesignHeight="700" d:DesignWidth="300"
+             Background="#1E1E1E" Foreground="#D4D4D4" FontSize="12">
+
     <UserControl.Resources>
-        <!-- Value Converters -->
+
+        <!-- Converters -->
         <local:NullToVisibilityConverter x:Key="NullToVisibilityConverter"/>
         <local:InverseNullToVisibilityConverter x:Key="InverseNullToVisibilityConverter"/>
-        <local:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibilityConverter"/>
 
-        <!-- Styles -->
+        <!-- Colors -->
+        <SolidColorBrush x:Key="BgPrimary"     Color="#1E1E1E"/>
+        <SolidColorBrush x:Key="BgSurface"     Color="#252526"/>
+        <SolidColorBrush x:Key="BgInput"       Color="#2D2D2D"/>
+        <SolidColorBrush x:Key="BorderMuted"   Color="#3A3A3A"/>
+        <SolidColorBrush x:Key="BorderInput"   Color="#3D3D3D"/>
+        <SolidColorBrush x:Key="TextPrimary"   Color="#D4D4D4"/>
+        <SolidColorBrush x:Key="TextMuted"     Color="#888888"/>
+        <SolidColorBrush x:Key="TextDim"       Color="#555555"/>
+        <SolidColorBrush x:Key="AccentBlue"    Color="#0E639C"/>
+        <SolidColorBrush x:Key="AccentTeal"    Color="#4EC9B0"/>
+        <SolidColorBrush x:Key="AccentGreen"   Color="#3D8B3D"/>
+        <SolidColorBrush x:Key="AccentAmber"   Color="#C4A882"/>
+        <SolidColorBrush x:Key="AccentRed"     Color="#F48771"/>
+        <SolidColorBrush x:Key="AccentYellow"  Color="#DCDCAA"/>
+        <SolidColorBrush x:Key="HoverBlue"     Color="#2A3A4A"/>
+        <SolidColorBrush x:Key="ActiveBlue"    Color="#1A3A5C"/>
+        <SolidColorBrush x:Key="HoverGreen"    Color="#1E2E1E"/>
+        <SolidColorBrush x:Key="Separator"     Color="#252525"/>
+
+        <!-- Base TextBlock -->
         <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
             <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Margin" Value="0,0,0,4"/>
         </Style>
-        <Style TargetType="Button">
-            <Setter Property="Padding" Value="8,4"/>
-            <Setter Property="Margin" Value="0,4,0,0"/>
+
+        <!-- Label (uppercase section header) -->
+        <Style x:Key="SectionLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextDim}"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
-        <Style TargetType="ListBox">
-            <Setter Property="BorderBrush" Value="#CCCCCC"/>
+
+        <!-- Group label (amber, settings subheadings) -->
+        <Style x:Key="GroupLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource AccentAmber}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="0,10,0,5"/>
+        </Style>
+
+        <!-- Field label -->
+        <Style x:Key="FieldLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Margin" Value="0,7,0,3"/>
+        </Style>
+
+        <!-- Muted value text -->
+        <Style x:Key="MutedText" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+            <Setter Property="FontSize" Value="11"/>
+        </Style>
+
+        <!-- Teal ID text -->
+        <Style x:Key="IdText" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource AccentTeal}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+
+        <!-- Monospace command text -->
+        <Style x:Key="CommandText" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource AccentYellow}"/>
+            <Setter Property="FontFamily" Value="Consolas"/>
+            <Setter Property="FontSize" Value="11"/>
+        </Style>
+
+        <!-- Command description text -->
+        <Style x:Key="CommandDesc" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextDim}"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="Margin" Value="0,2,0,0"/>
+        </Style>
+
+        <!-- TextBox -->
+        <Style TargetType="TextBox">
+            <Setter Property="Background" Value="{StaticResource BgInput}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderInput}"/>
             <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="6,4"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="CaretBrush" Value="{StaticResource TextPrimary}"/>
         </Style>
+
+        <!-- ComboBox -->
+        <Style TargetType="ComboBox">
+            <Setter Property="Background" Value="{StaticResource BgInput}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderInput}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="6,4"/>
+            <Setter Property="FontSize" Value="11"/>
+        </Style>
+
+        <!-- Primary action button (blue) -->
+        <Style x:Key="PrimaryButton" TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource AccentBlue}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#1177BB"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter Property="Background" Value="#0A4F80"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Secondary button (dark surface) -->
+        <Style x:Key="SecondaryButton" TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource BgSurface}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderMuted}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,5"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="BorderBrush" Value="#555555"/>
+                                <Setter Property="Background" Value="#2A2A2A"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Icon button (small square, refresh etc.) -->
+        <Style x:Key="IconButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderMuted}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Width" Value="22"/>
+            <Setter Property="Height" Value="22"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="BorderBrush" Value="#555555"/>
+                                <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Danger button (red border, for remove) -->
+        <Style x:Key="DangerButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{StaticResource AccentRed}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderInput}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ListBox base -->
+        <Style TargetType="ListBox">
+            <Setter Property="Background" Value="{StaticResource BgSurface}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderMuted}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
+        </Style>
+
+        <!-- ListBoxItem base -->
+        <Style TargetType="ListBoxItem">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="ItemBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderThickness="0,0,0,1"
+                                BorderBrush="{StaticResource Separator}">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background" Value="{StaticResource HoverBlue}"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background" Value="{StaticResource ActiveBlue}"/>
+                                <Setter TargetName="ItemBorder" Property="BorderThickness" Value="2,0,0,1"/>
+                                <Setter TargetName="ItemBorder" Property="BorderBrush" Value="{StaticResource AccentBlue}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Tab button style -->
+        <Style x:Key="TabButton" TargetType="RadioButton">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{StaticResource TextDim}"/>
+            <Setter Property="BorderThickness" Value="0,0,0,2"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Padding" Value="4,7"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="GroupName" Value="Tabs"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+                                <Setter Property="Background" Value="{StaticResource BgSurface}"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter Property="Foreground" Value="{StaticResource AccentTeal}"/>
+                                <Setter Property="BorderBrush" Value="{StaticResource AccentTeal}"/>
+                                <Setter Property="Background" Value="{StaticResource BgSurface}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Command row button -->
+        <Style x:Key="CommandButton" TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource BgSurface}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderMuted}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="10,7"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#2A2A2A"/>
+                                <Setter Property="BorderBrush" Value="#444444"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
     </UserControl.Resources>
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-    <Grid Margin="8">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
+    <Border Background="{StaticResource BgPrimary}"
+            BorderBrush="{StaticResource BorderMuted}"
+            BorderThickness="1">
+        <DockPanel>
 
-        <!-- Selected Basin Section -->
-        <StackPanel Grid.Row="0">
-            <TextBlock Text="Selected Basin" FontWeight="Bold" FontSize="14" Margin="0,0,0,8"/>
-
-            <Border BorderBrush="#CCCCCC" BorderThickness="1" Padding="8" Background="#F9F9F9"
-                    Visibility="{Binding SelectedBasin, Converter={StaticResource NullToVisibilityConverter}}">
-                <StackPanel>
-                    <TextBlock>
-                        <Run Text="Layer: " FontWeight="SemiBold"/>
-                        <Run Text="{Binding SelectedBasin.Layer, Mode=OneWay}"/>
-                    </TextBlock>
-                    <TextBlock>
-                        <Run Text="Handle: " FontWeight="SemiBold"/>
-                        <Run Text="{Binding SelectedBasin.ObjectId.Handle, Mode=OneWay}"/>
-                    </TextBlock>
-
-                    <!-- Edit Basin Attributes -->
-                    <StackPanel Margin="0,12,0,0">
-                        <TextBlock Text="Basin ID:" FontWeight="SemiBold" Margin="0,0,0,4"/>
-                        <TextBox Text="{Binding NewBasinId, UpdateSourceTrigger=PropertyChanged}" 
-                                 Padding="4" Margin="0,0,0,8"/>
-
-                        <TextBlock Text="Boundary:" FontWeight="SemiBold" Margin="0,0,0,4"/>
-                        <ComboBox ItemsSource="{Binding BoundaryOptions}" 
-                                  SelectedItem="{Binding SelectedBoundary, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                  Margin="0,0,0,8"/>
-
-                        <TextBlock Text="Development:" FontWeight="SemiBold" Margin="0,0,0,4"/>
-                        <ComboBox ItemsSource="{Binding DevelopmentOptions}" 
-                                  SelectedItem="{Binding SelectedDevelopment, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                  Margin="0,0,0,8"/>
-
-                        <Button Content="{Binding TagButtonText}" Command="{Binding TagBasinCommand}" HorizontalAlignment="Left"/>
-                    </StackPanel>
-                </StackPanel>
+            <!-- ═══ PANEL HEADER ═══ -->
+            <Border DockPanel.Dock="Top"
+                    Background="{StaticResource BgSurface}"
+                    BorderBrush="{StaticResource BorderMuted}"
+                    BorderThickness="0,0,0,1"
+                    Padding="10,7">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Right" Text="C3D Tools"
+                               Foreground="{StaticResource TextDim}" FontSize="10"
+                               VerticalAlignment="Center"/>
+                    <TextBlock Text="Basin Palette"
+                               Foreground="{StaticResource TextPrimary}"
+                               FontSize="12" FontWeight="SemiBold"
+                               VerticalAlignment="Center"/>
+                </DockPanel>
             </Border>
 
-            <TextBlock Text="Select a basin polyline to see details here."
-                       Foreground="Gray" FontStyle="Italic"
-                       Visibility="{Binding SelectedBasin, Converter={StaticResource InverseNullToVisibilityConverter}}"/>
-        </StackPanel>
-
-        <!-- Tagged Basins Section -->
-        <StackPanel Grid.Row="1" Margin="0,16,0,0">
-            <DockPanel Margin="0,0,0,8">
-                <Button Content="↻" DockPanel.Dock="Right" Width="28" Height="28" 
-                        Command="{Binding RefreshCommand}" ToolTip="Refresh basin list"
-                        Margin="8,0,0,0" Padding="0"/>
-                <TextBlock Text="Tagged Basins" FontWeight="Bold" FontSize="14" VerticalAlignment="Center"/>
-            </DockPanel>
-
-            <!-- Column Headers -->
-            <Grid Margin="4,0,4,4">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="0.6*" MinWidth="35"/>
-                    <ColumnDefinition Width="0.8*" MinWidth="70"/>
-                    <ColumnDefinition Width="0.9*" MinWidth="85"/>
-                    <ColumnDefinition Width="1.5*" MinWidth="100"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock Text="ID" FontWeight="SemiBold" FontSize="11" Foreground="#666666" Grid.Column="0" Padding="4,2"/>
-                <TextBlock Text="Boundary" FontWeight="SemiBold" FontSize="11" Foreground="#666666" Grid.Column="1" Padding="4,2"/>
-                <TextBlock Text="Development" FontWeight="SemiBold" FontSize="11" Foreground="#666666" Grid.Column="2" Padding="4,2"/>
-                <TextBlock Text="Layer" FontWeight="SemiBold" FontSize="11" Foreground="#666666" Grid.Column="3" Padding="4,2"/>
-            </Grid>
-
-            <ListBox ItemsSource="{Binding TaggedBasins}" 
-                     SelectedItem="{Binding SelectedTaggedBasin}"
-                     MinHeight="120" MaxHeight="300"
-                     BorderThickness="1" BorderBrush="#CCCCCC"
-                     Padding="0,0,0,4">
-                <ListBox.ItemContainerStyle>
-                    <Style TargetType="ListBoxItem">
-                        <Setter Property="Padding" Value="0"/>
-                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-                    </Style>
-                </ListBox.ItemContainerStyle>
-                <ListBox.ItemTemplate>
-                    <DataTemplate>
-                        <Button Command="{Binding DataContext.SelectBasinItemCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
-                                CommandParameter="{Binding}"
-                                HorizontalAlignment="Stretch" 
-                                HorizontalContentAlignment="Stretch"
-                                Padding="0"
-                                Margin="0"
-                                Background="Transparent"
-                                BorderThickness="0"
-                                Cursor="Hand">
-                            <Button.Style>
-                                <Style TargetType="Button">
-                                    <Setter Property="Template">
-                                        <Setter.Value>
-                                            <ControlTemplate TargetType="Button">
-                                                <Border Background="{TemplateBinding Background}" 
-                                                        Padding="{TemplateBinding Padding}">
-                                                    <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"/>
-                                                </Border>
-                                                <ControlTemplate.Triggers>
-                                                    <Trigger Property="IsPressed" Value="True">
-                                                        <Setter Property="Background" Value="#BBDEFB"/>
-                                                    </Trigger>
-                                                    <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter Property="Background" Value="#E3F2FD"/>
-                                                    </Trigger>
-                                                </ControlTemplate.Triggers>
-                                            </ControlTemplate>
-                                        </Setter.Value>
-                                    </Setter>
-                                </Style>
-                            </Button.Style>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="0.6*" MinWidth="35"/>
-                                    <ColumnDefinition Width="0.8*" MinWidth="70"/>
-                                    <ColumnDefinition Width="0.9*" MinWidth="85"/>
-                                    <ColumnDefinition Width="1.5*" MinWidth="100"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="{Binding BasinId}" Grid.Column="0" VerticalAlignment="Center" Padding="4,4"/>
-                                <TextBlock Text="{Binding Boundary}" Grid.Column="1" VerticalAlignment="Center" Padding="4,4" Foreground="#555555"/>
-                                <TextBlock Text="{Binding Development}" Grid.Column="2" VerticalAlignment="Center" Padding="4,4" Foreground="#555555"/>
-                                <TextBlock Text="{Binding Layer}" Grid.Column="3" VerticalAlignment="Center" Padding="4,4" Foreground="#555555"/>
-                            </Grid>
-                        </Button>
-                    </DataTemplate>
-                </ListBox.ItemTemplate>
-            </ListBox>
-
-            <TextBlock Text="{Binding TaggedBasins.Count, StringFormat='Count: {0}'}" 
-                       Margin="0,4,0,0" Foreground="Gray" FontSize="11"/>
-        </StackPanel>
-
-        <Separator Grid.Row="2" Margin="0,12"/>
-
-        <!-- Untagged Basins Section -->
-        <StackPanel Grid.Row="3" Margin="0,12,0,0">
-            <DockPanel Margin="0,0,0,8">
-                <Button Content="↻" DockPanel.Dock="Right" Width="28" Height="28" 
-                        Command="{Binding RefreshCommand}" ToolTip="Refresh basin list"
-                        Margin="8,0,0,0" Padding="0"/>
-                <TextBlock Text="Untagged Basins" FontWeight="Bold" FontSize="14" VerticalAlignment="Center"/>
-            </DockPanel>
-
-            <!-- Layer Filter -->
-            <DockPanel Margin="0,0,0,8">
-                <TextBlock Text="Filter by Layer:" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                <ComboBox ItemsSource="{Binding AvailableLayers}" 
-                          SelectedItem="{Binding SelectedLayer}"
-                          MinWidth="150"/>
-            </DockPanel>
-
-            <ListBox ItemsSource="{Binding UntaggedBasins}" 
-                     SelectedItem="{Binding SelectedUntaggedBasin}"
-                     MinHeight="120" MaxHeight="300"
-                     BorderThickness="1" BorderBrush="#CCCCCC"
-                     Padding="0,0,0,4">
-                <ListBox.ItemContainerStyle>
-                    <Style TargetType="ListBoxItem">
-                        <Setter Property="Padding" Value="0"/>
-                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-                    </Style>
-                </ListBox.ItemContainerStyle>
-                <ListBox.ItemTemplate>
-                    <DataTemplate>
-                        <Button Content="{Binding DisplayText}" 
-                                Command="{Binding DataContext.SelectBasinItemCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
-                                CommandParameter="{Binding}"
-                                HorizontalAlignment="Stretch" 
-                                HorizontalContentAlignment="Left"
-                                Padding="8,4"
-                                Margin="0"
-                                Background="Transparent"
-                                BorderThickness="0"
-                                Cursor="Hand"
-                                Foreground="#666666">
-                            <Button.Style>
-                                <Style TargetType="Button">
-                                    <Setter Property="Template">
-                                        <Setter.Value>
-                                            <ControlTemplate TargetType="Button">
-                                                <Border Background="{TemplateBinding Background}" 
-                                                        Padding="{TemplateBinding Padding}">
-                                                    <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"/>
-                                                </Border>
-                                                <ControlTemplate.Triggers>
-                                                    <Trigger Property="IsPressed" Value="True">
-                                                        <Setter Property="Background" Value="#BBDEFB"/>
-                                                    </Trigger>
-                                                    <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter Property="Background" Value="#E3F2FD"/>
-                                                    </Trigger>
-                                                </ControlTemplate.Triggers>
-                                            </ControlTemplate>
-                                        </Setter.Value>
-                                    </Setter>
-                                </Style>
-                            </Button.Style>
-                        </Button>
-                    </DataTemplate>
-                </ListBox.ItemTemplate>
-            </ListBox>
-
-            <TextBlock Text="{Binding UntaggedBasins.Count, StringFormat='Count: {0}'}" 
-                       Margin="0,4,0,0" Foreground="Gray" FontSize="11"/>
-        </StackPanel>
-
-        <!-- Settings Section -->
-        <Expander Grid.Row="4" Header="Settings" Margin="0,12,0,0" IsExpanded="True">
-            <StackPanel Margin="4,8,4,4">
-
-                <!-- Split Basins Layers -->
-                <TextBlock Text="Split Basins Layers" FontWeight="Bold" FontSize="13" Margin="0,0,0,6"/>
-
-                <TextBlock Text="Onsite Layer:" FontWeight="SemiBold" Margin="0,0,0,2"/>
-                <TextBox Text="{Binding OnsiteLayer, UpdateSourceTrigger=PropertyChanged}"
-                         Padding="4" Margin="0,0,0,8"/>
-
-                <TextBlock Text="Offsite Layer:" FontWeight="SemiBold" Margin="0,0,0,2"/>
-                <TextBox Text="{Binding OffsiteLayer, UpdateSourceTrigger=PropertyChanged}"
-                         Padding="4" Margin="0,0,0,12"/>
-
-                <!-- Landuse Area Unit -->
-                <TextBlock Text="Landuse Area Unit" FontWeight="Bold" FontSize="13" Margin="0,0,0,4"/>
-                <ComboBox ItemsSource="{Binding AreaUnitOptions}"
-                          SelectedItem="{Binding SelectedAreaUnit, Mode=TwoWay}"
-                          Margin="0,0,0,12"/>
-
-                <!-- Landuse Hatch Layers -->
-                <TextBlock Text="Landuse Hatch Layers" FontWeight="Bold" FontSize="13" Margin="0,0,0,4"/>
-                <TextBlock Text="Wildcards supported: e.g.  LU-*,  *HATCH*"
-                           FontStyle="Italic" FontSize="10" Foreground="Gray" Margin="0,0,0,6"/>
-
-                <ListBox ItemsSource="{Binding LanduseHatchLayers}"
-                         SelectedItem="{Binding SelectedLayerPattern, Mode=TwoWay}"
-                         MinHeight="60" MaxHeight="150"
-                         BorderThickness="1" BorderBrush="#CCCCCC"
-                         Margin="0,0,0,4"/>
-
-                <!-- Add pattern row -->
-                <DockPanel Margin="0,0,0,4">
-                    <Button Content="Add" DockPanel.Dock="Right"
-                            Command="{Binding AddLayerPatternCommand}"
-                            Padding="8,4" Margin="4,0,0,0"/>
-                    <TextBox Text="{Binding NewLayerPattern, UpdateSourceTrigger=PropertyChanged}"
-                             Padding="4"
-                             ToolTip="Enter a layer name or wildcard pattern (e.g. LU-*)"/>
+            <!-- ═══ SELECTED BASIN STRIP (persistent) ═══ -->
+            <Border DockPanel.Dock="Top"
+                    Background="{StaticResource BgSurface}"
+                    BorderBrush="{StaticResource BorderMuted}"
+                    BorderThickness="0,0,0,1"
+                    Padding="10,8"
+                    Visibility="{Binding SelectedBasin, Converter={StaticResource NullToVisibilityConverter}}">
+                <DockPanel>
+                    <!-- Basin ID badge -->
+                    <Border DockPanel.Dock="Left"
+                            Background="{StaticResource ActiveBlue}"
+                            BorderBrush="{StaticResource AccentBlue}"
+                            BorderThickness="1"
+                            Padding="7,2"
+                            Margin="0,0,8,0"
+                            VerticalAlignment="Center">
+                        <TextBlock Text="{Binding SelectedBasin.BasinId}"
+                                   Foreground="{StaticResource AccentTeal}"
+                                   FontSize="11" FontWeight="SemiBold"/>
+                    </Border>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock FontSize="10" Foreground="{StaticResource TextDim}">
+                            <Run Text="{Binding SelectedBasin.Layer, Mode=OneWay}"/>
+                            <Run Text=" · "/>
+                            <Run Text="Handle "/>
+                            <Run Text="{Binding SelectedBasin.ObjectId.Handle, Mode=OneWay}"/>
+                        </TextBlock>
+                        <TextBlock FontSize="10" Foreground="#444444">
+                            <Run Text="{Binding SelectedBoundary, Mode=OneWay}"/>
+                            <Run Text=" · "/>
+                            <Run Text="{Binding SelectedDevelopment, Mode=OneWay}"/>
+                        </TextBlock>
+                    </StackPanel>
                 </DockPanel>
+            </Border>
 
-                <Button Content="Remove Selected"
-                        Command="{Binding RemoveLayerPatternCommand}"
-                        HorizontalAlignment="Left"
-                        Padding="8,4" Margin="0,0,0,12"/>
+            <!-- No selection placeholder -->
+            <Border DockPanel.Dock="Top"
+                    Background="{StaticResource BgSurface}"
+                    BorderBrush="{StaticResource BorderMuted}"
+                    BorderThickness="0,0,0,1"
+                    Padding="10,8"
+                    Visibility="{Binding SelectedBasin, Converter={StaticResource InverseNullToVisibilityConverter}}">
+                <TextBlock Text="No basin selected" FontSize="10"
+                           Foreground="{StaticResource TextDim}" FontStyle="Italic"/>
+            </Border>
 
-                <!-- Save buttons -->
-                <Button Content="Save to Drawing"
-                        Command="{Binding SaveToDrawingCommand}"
-                        HorizontalAlignment="Stretch" Margin="0,0,0,4"/>
-                <Button Content="Save as Default"
-                        Command="{Binding SaveAsDefaultCommand}"
-                        HorizontalAlignment="Stretch" Margin="0,0,0,4"/>
-                <Button Content="Save to Drawing &amp; Set as Default"
-                        Command="{Binding SaveToDrawingAndSetAsDefaultCommand}"
-                        HorizontalAlignment="Stretch" Margin="0,0,0,0"/>
-            </StackPanel>
-        </Expander>
+            <!-- ═══ TAB BAR ═══ -->
+            <Border DockPanel.Dock="Top"
+                    Background="{StaticResource BgPrimary}"
+                    BorderBrush="{StaticResource BorderMuted}"
+                    BorderThickness="0,0,0,1">
+                <UniformGrid Rows="1">
+                    <RadioButton Style="{StaticResource TabButton}" Content="Basins"
+                                 IsChecked="True"
+                                 Command="{Binding SwitchTabCommand}" CommandParameter="Basins"/>
+                    <RadioButton Style="{StaticResource TabButton}" Content="Untagged"
+                                 Command="{Binding SwitchTabCommand}" CommandParameter="Untagged"/>
+                    <RadioButton Style="{StaticResource TabButton}" Content="Landuses"
+                                 Command="{Binding SwitchTabCommand}" CommandParameter="Landuses"/>
+                    <RadioButton Style="{StaticResource TabButton}" Content="Settings"
+                                 Command="{Binding SwitchTabCommand}" CommandParameter="Settings"/>
+                    <RadioButton Style="{StaticResource TabButton}" Content="Commands"
+                                 Command="{Binding SwitchTabCommand}" CommandParameter="Commands"/>
+                </UniformGrid>
+            </Border>
 
-        <!-- Commands Section -->
-        <StackPanel Grid.Row="5" Margin="0,12,0,0">
-            <TextBlock Text="Commands" FontWeight="Bold" FontSize="14" Margin="0,0,0,8"/>
-            <Button Content="Run BASINLANDUSE"
-                    Command="{Binding RunBasinLanduseCommand}"
-                    HorizontalAlignment="Stretch" Margin="0,0,0,4"/>
-            <Button Content="Run SPLITBASINS"
-                    Command="{Binding RunSplitBasinsCommand}"
-                    HorizontalAlignment="Stretch" Margin="0,0,0,4"/>
-        </StackPanel>
+            <!-- ═══ TAB CONTENT ═══ -->
+            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <ContentControl Content="{Binding}">
+                    <ContentControl.Resources>
 
-        <!-- Info Section -->
-        <StackPanel Grid.Row="6" Margin="0,12,0,0">
-            <TextBlock TextWrapping="Wrap" FontSize="10" Foreground="Gray">
-                <Run Text="Tip: Use TAGBASIN, GETBASIN, LABELBASIN commands for additional operations."/>
-            </TextBlock>
-        </StackPanel>
-    </Grid>
-    </ScrollViewer>
+                        <!-- ─── BASINS TAB ─── -->
+                        <DataTemplate x:Key="BasinsTab">
+                            <StackPanel>
+                                <!-- Edit Selected -->
+                                <Border BorderBrush="{StaticResource Separator}"
+                                        BorderThickness="0,0,0,1" Padding="10">
+                                    <StackPanel>
+                                        <TextBlock Text="EDIT SELECTED" Style="{StaticResource SectionLabel}"
+                                                   Margin="0,0,0,7"/>
+                                        <TextBlock Text="Basin ID" Style="{StaticResource FieldLabel}"
+                                                   Margin="0,0,0,3"/>
+                                        <TextBox Text="{Binding NewBasinId, UpdateSourceTrigger=PropertyChanged}"
+                                                 Margin="0,0,0,6"/>
+                                        <TextBlock Text="Boundary" Style="{StaticResource FieldLabel}"
+                                                   Margin="0,0,0,3"/>
+                                        <ComboBox ItemsSource="{Binding BoundaryOptions}"
+                                                  SelectedItem="{Binding SelectedBoundary, Mode=TwoWay}"
+                                                  Margin="0,0,0,6"/>
+                                        <TextBlock Text="Development" Style="{StaticResource FieldLabel}"
+                                                   Margin="0,0,0,3"/>
+                                        <ComboBox ItemsSource="{Binding DevelopmentOptions}"
+                                                  SelectedItem="{Binding SelectedDevelopment, Mode=TwoWay}"
+                                                  Margin="0,0,0,0"/>
+                                        <Button Content="{Binding TagButtonText}"
+                                                Command="{Binding TagBasinCommand}"
+                                                Style="{StaticResource PrimaryButton}"
+                                                HorizontalAlignment="Stretch"
+                                                Margin="0,9,0,0"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Tagged Basins List -->
+                                <StackPanel Margin="10">
+                                    <DockPanel Margin="0,0,0,7">
+                                        <Button DockPanel.Dock="Right"
+                                                Content="↻"
+                                                Style="{StaticResource IconButton}"
+                                                Command="{Binding RefreshCommand}"
+                                                ToolTip="Refresh"/>
+                                        <TextBlock Text="TAGGED BASINS" Style="{StaticResource SectionLabel}"
+                                                   VerticalAlignment="Center"/>
+                                    </DockPanel>
+
+                                    <!-- Column headers -->
+                                    <Grid Margin="0,0,0,3">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="0.5*"/>
+                                            <ColumnDefinition Width="0.75*"/>
+                                            <ColumnDefinition Width="0.8*"/>
+                                            <ColumnDefinition Width="1.1*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="ID"    FontSize="10" Foreground="#444444" Padding="2,0" FontWeight="SemiBold"/>
+                                        <TextBlock Grid.Column="1" Text="BOUND" FontSize="10" Foreground="#444444" Padding="2,0" FontWeight="SemiBold"/>
+                                        <TextBlock Grid.Column="2" Text="DEV"   FontSize="10" Foreground="#444444" Padding="2,0" FontWeight="SemiBold"/>
+                                        <TextBlock Grid.Column="3" Text="LAYER" FontSize="10" Foreground="#444444" Padding="2,0" FontWeight="SemiBold"/>
+                                    </Grid>
+
+                                    <ListBox ItemsSource="{Binding TaggedBasins}"
+                                             SelectedItem="{Binding SelectedTaggedBasin}"
+                                             MinHeight="80" MaxHeight="280">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Margin="2,5,2,5">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="0.5*"/>
+                                                        <ColumnDefinition Width="0.75*"/>
+                                                        <ColumnDefinition Width="0.8*"/>
+                                                        <ColumnDefinition Width="1.1*"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Grid.Column="0" Text="{Binding BasinId}"
+                                                               Style="{StaticResource IdText}" Padding="6,0"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding Boundary}"
+                                                               Style="{StaticResource MutedText}" Padding="4,0"/>
+                                                    <TextBlock Grid.Column="2" Text="{Binding Development}"
+                                                               Style="{StaticResource MutedText}" Padding="4,0"/>
+                                                    <TextBlock Grid.Column="3" Text="{Binding Layer}"
+                                                               Style="{StaticResource MutedText}" Padding="4,0"/>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+
+                                    <TextBlock Text="{Binding TaggedBasins.Count, StringFormat='Count: {0}'}"
+                                               Foreground="{StaticResource TextDim}" FontSize="10"
+                                               Margin="0,5,0,0"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </DataTemplate>
+
+                        <!-- ─── UNTAGGED TAB ─── -->
+                        <DataTemplate x:Key="UntaggedTab">
+                            <StackPanel Margin="10">
+                                <DockPanel Margin="0,0,0,7">
+                                    <Button DockPanel.Dock="Right"
+                                            Content="↻"
+                                            Style="{StaticResource IconButton}"
+                                            Command="{Binding RefreshCommand}"
+                                            ToolTip="Refresh"/>
+                                    <TextBlock Text="UNTAGGED BASINS" Style="{StaticResource SectionLabel}"
+                                               VerticalAlignment="Center"/>
+                                </DockPanel>
+
+                                <DockPanel Margin="0,0,0,8">
+                                    <TextBlock DockPanel.Dock="Left" Text="Layer"
+                                               FontSize="11" Foreground="{StaticResource TextDim}"
+                                               VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                    <ComboBox ItemsSource="{Binding AvailableLayers}"
+                                              SelectedItem="{Binding SelectedLayer}"/>
+                                </DockPanel>
+
+                                <ListBox ItemsSource="{Binding UntaggedBasins}"
+                                         SelectedItem="{Binding SelectedUntaggedBasin}"
+                                         MinHeight="80" MaxHeight="360">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Margin="8,5">
+                                                <TextBlock Text="{Binding Handle}"
+                                                           Foreground="#9CDCFE" FontSize="11"/>
+                                                <TextBlock Text="{Binding Layer}"
+                                                           Foreground="{StaticResource TextDim}" FontSize="10"/>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+
+                                <TextBlock Text="{Binding UntaggedBasins.Count, StringFormat='Count: {0}'}"
+                                           Foreground="{StaticResource TextDim}" FontSize="10"
+                                           Margin="0,5,0,0"/>
+                            </StackPanel>
+                        </DataTemplate>
+
+                        <!-- ─── LANDUSES TAB ─── -->
+                        <DataTemplate x:Key="LandusesTab">
+                            <StackPanel Margin="10">
+                                <DockPanel Margin="0,0,0,4">
+                                    <Button DockPanel.Dock="Right"
+                                            Content="↻"
+                                            Style="{StaticResource IconButton}"
+                                            Command="{Binding RefreshLandusesCommand}"
+                                            ToolTip="Refresh layers"/>
+                                    <TextBlock Text="HATCH LAYERS" Style="{StaticResource SectionLabel}"
+                                               VerticalAlignment="Center"/>
+                                </DockPanel>
+
+                                <TextBlock Text="Select layers to include as landuses in CN calculations."
+                                           Foreground="{StaticResource TextDim}" FontSize="10"
+                                           FontStyle="Italic" TextWrapping="Wrap"
+                                           Margin="0,0,0,8"/>
+
+                                <!-- Filter search box -->
+                                <TextBox Text="{Binding LanduseLayerFilter, UpdateSourceTrigger=PropertyChanged}"
+                                         Margin="0,0,0,7">
+                                    <TextBox.Style>
+                                        <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+                                            <Style.Triggers>
+                                                <Trigger Property="Text" Value="">
+                                                    <Setter Property="Background">
+                                                        <Setter.Value>
+                                                            <VisualBrush Stretch="None" AlignmentX="Left">
+                                                                <VisualBrush.Visual>
+                                                                    <TextBlock Text="Filter layers..."
+                                                                               Foreground="#444444"
+                                                                               FontSize="11"
+                                                                               Margin="6,4"/>
+                                                                </VisualBrush.Visual>
+                                                            </VisualBrush>
+                                                        </Setter.Value>
+                                                    </Setter>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBox.Style>
+                                </TextBox>
+
+                                <!-- Layer list with checkboxes -->
+                                <ListBox ItemsSource="{Binding FilteredLanduseLayers}"
+                                         MinHeight="80" MaxHeight="300"
+                                         SelectionMode="Single">
+                                    <ListBox.ItemContainerStyle>
+                                        <Style TargetType="ListBoxItem">
+                                            <Setter Property="Padding" Value="0"/>
+                                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                            <Setter Property="Background" Value="Transparent"/>
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="ListBoxItem">
+                                                        <Border x:Name="RowBorder"
+                                                                Background="{TemplateBinding Background}"
+                                                                BorderBrush="{StaticResource Separator}"
+                                                                BorderThickness="0,0,0,1">
+                                                            <ContentPresenter/>
+                                                        </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter TargetName="RowBorder" Property="Background" Value="{StaticResource HoverBlue}"/>
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+                                    </ListBox.ItemContainerStyle>
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <DockPanel Margin="8,5">
+                                                <TextBlock DockPanel.Dock="Right"
+                                                           Text="{Binding HatchCount}"
+                                                           Foreground="{StaticResource TextDim}"
+                                                           FontSize="10" VerticalAlignment="Center"
+                                                           Margin="4,0,0,0"/>
+                                                <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                          VerticalAlignment="Center"
+                                                          Margin="0,0,8,0">
+                                                    <CheckBox.Style>
+                                                        <Style TargetType="CheckBox">
+                                                            <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+                                                        </Style>
+                                                    </CheckBox.Style>
+                                                </CheckBox>
+                                                <TextBlock Text="{Binding LayerName}"
+                                                           FontSize="11" VerticalAlignment="Center">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                                    <Setter Property="Foreground" Value="#81C784"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                            </DockPanel>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+
+                                <!-- Summary row -->
+                                <DockPanel Margin="0,5,0,0">
+                                    <Button DockPanel.Dock="Right"
+                                            Content="Clear all"
+                                            Command="{Binding ClearLanduseSelectionsCommand}"
+                                            Style="{StaticResource DangerButton}"
+                                            Padding="6,2" FontSize="10"/>
+                                    <TextBlock Text="{Binding SelectedLanduseCount, StringFormat={}{0} layers selected}"
+                                               Foreground="{StaticResource TextDim}" FontSize="10"
+                                               VerticalAlignment="Center"/>
+                                </DockPanel>
+                            </StackPanel>
+                        </DataTemplate>
+
+                        <!-- ─── SETTINGS TAB ─── -->
+                        <DataTemplate x:Key="SettingsTab">
+                            <StackPanel Margin="10">
+                                <TextBlock Text="Split basins layers" Style="{StaticResource GroupLabel}"
+                                           Margin="0,0,0,5"/>
+                                <TextBlock Text="Onsite layer" Style="{StaticResource FieldLabel}"
+                                           Margin="0,0,0,3"/>
+                                <TextBox Text="{Binding OnsiteLayer, UpdateSourceTrigger=PropertyChanged}"
+                                         Margin="0,0,0,6"/>
+                                <TextBlock Text="Offsite layer" Style="{StaticResource FieldLabel}"
+                                           Margin="0,0,0,3"/>
+                                <TextBox Text="{Binding OffsiteLayer, UpdateSourceTrigger=PropertyChanged}"
+                                         Margin="0,0,0,10"/>
+
+                                <TextBlock Text="Landuse area unit" Style="{StaticResource GroupLabel}"/>
+                                <ComboBox ItemsSource="{Binding AreaUnitOptions}"
+                                          SelectedItem="{Binding SelectedAreaUnit, Mode=TwoWay}"
+                                          Margin="0,0,0,16"/>
+
+                                <Button Content="Save to drawing"
+                                        Command="{Binding SaveToDrawingCommand}"
+                                        Style="{StaticResource SecondaryButton}"
+                                        HorizontalAlignment="Stretch"
+                                        Margin="0,0,0,4"/>
+                                <Button Content="Save as default"
+                                        Command="{Binding SaveAsDefaultCommand}"
+                                        Style="{StaticResource SecondaryButton}"
+                                        HorizontalAlignment="Stretch"
+                                        Margin="0,0,0,4"/>
+                                <Button Content="Save to drawing &amp; set as default"
+                                        Command="{Binding SaveToDrawingAndSetAsDefaultCommand}"
+                                        Style="{StaticResource PrimaryButton}"
+                                        HorizontalAlignment="Stretch"/>
+                            </StackPanel>
+                        </DataTemplate>
+
+                        <!-- ─── COMMANDS TAB ─── -->
+                        <DataTemplate x:Key="CommandsTab">
+                            <StackPanel>
+                                <StackPanel Margin="10">
+                                    <TextBlock Text="RUN COMMAND" Style="{StaticResource SectionLabel}"
+                                               Margin="0,0,0,10"/>
+
+                                    <Button Command="{Binding RunBasinLanduseCommand}"
+                                            Style="{StaticResource CommandButton}"
+                                            HorizontalAlignment="Stretch">
+                                        <StackPanel>
+                                            <TextBlock Text="BASINLANDUSE" Style="{StaticResource CommandText}"/>
+                                            <TextBlock Text="Calculate CN from hatch intersections"
+                                                       Style="{StaticResource CommandDesc}"/>
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button Command="{Binding RunSplitBasinsCommand}"
+                                            Style="{StaticResource CommandButton}"
+                                            HorizontalAlignment="Stretch">
+                                        <StackPanel>
+                                            <TextBlock Text="SPLITBASINS" Style="{StaticResource CommandText}"/>
+                                            <TextBlock Text="Split basins to onsite / offsite layers"
+                                                       Style="{StaticResource CommandDesc}"/>
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button Command="{Binding TagBasinCommand}"
+                                            Style="{StaticResource CommandButton}"
+                                            HorizontalAlignment="Stretch">
+                                        <StackPanel>
+                                            <TextBlock Text="TAGBASIN" Style="{StaticResource CommandText}"/>
+                                            <TextBlock Text="Tag selected basin polyline"
+                                                       Style="{StaticResource CommandDesc}"/>
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button Command="{Binding GetBasinCommand}"
+                                            Style="{StaticResource CommandButton}"
+                                            HorizontalAlignment="Stretch">
+                                        <StackPanel>
+                                            <TextBlock Text="GETBASIN" Style="{StaticResource CommandText}"/>
+                                            <TextBlock Text="Read basin attributes from drawing"
+                                                       Style="{StaticResource CommandDesc}"/>
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button Command="{Binding LabelBasinCommand}"
+                                            Style="{StaticResource CommandButton}"
+                                            HorizontalAlignment="Stretch">
+                                        <StackPanel>
+                                            <TextBlock Text="LABELBASIN" Style="{StaticResource CommandText}"/>
+                                            <TextBlock Text="Place basin label annotation"
+                                                       Style="{StaticResource CommandDesc}"/>
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
+
+                                <Border BorderBrush="{StaticResource Separator}"
+                                        BorderThickness="0,1,0,0" Padding="10,8">
+                                    <TextBlock TextWrapping="Wrap" FontSize="10"
+                                               Foreground="{StaticResource TextDim}">
+                                        Commands can also be typed directly in the AutoCAD command line.
+                                    </TextBlock>
+                                </Border>
+                            </StackPanel>
+                        </DataTemplate>
+
+                    </ContentControl.Resources>
+
+                    <!-- Tab content switcher -->
+                    <ContentControl.Style>
+                        <Style TargetType="ContentControl">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding ActiveTab}" Value="Basins">
+                                    <Setter Property="ContentTemplate"
+                                            Value="{StaticResource BasinsTab}"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding ActiveTab}" Value="Untagged">
+                                    <Setter Property="ContentTemplate"
+                                            Value="{StaticResource UntaggedTab}"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding ActiveTab}" Value="Landuses">
+                                    <Setter Property="ContentTemplate"
+                                            Value="{StaticResource LandusesTab}"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding ActiveTab}" Value="Settings">
+                                    <Setter Property="ContentTemplate"
+                                            Value="{StaticResource SettingsTab}"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding ActiveTab}" Value="Commands">
+                                    <Setter Property="ContentTemplate"
+                                            Value="{StaticResource CommandsTab}"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ContentControl.Style>
+                </ContentControl>
+            </ScrollViewer>
+
+        </DockPanel>
+    </Border>
 </UserControl>
