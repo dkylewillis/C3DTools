@@ -37,7 +37,9 @@ namespace C3DTools.ViewModels
         private string? _selectedLayerPattern;
         private AreaUnit _areaUnit = AreaUnit.SquareFeet;
         private string _activeTab = "Basins";
+        private string _basinsSubTab = "Tagged";
         private string _landuseLayerFilter = string.Empty;
+        private bool _showOnlySelected = false;
         private ObservableCollection<LanduseLayerItem> _allLanduseLayers = new ObservableCollection<LanduseLayerItem>();
 
         public BasinPaletteViewModel()
@@ -64,6 +66,7 @@ namespace C3DTools.ViewModels
             GetBasinCommand = new RelayCommand(ExecuteGetBasin);
             LabelBasinCommand = new RelayCommand(ExecuteLabelBasin);
             SwitchTabCommand = new RelayCommand<string>(ExecuteSwitchTab);
+            SwitchBasinsSubTabCommand = new RelayCommand<string>(tab => BasinsSubTab = tab);
             RefreshLandusesCommand = new RelayCommand(ExecuteRefreshLanduses);
             ClearLanduseSelectionsCommand = new RelayCommand(ExecuteClearLanduseSelections);
 
@@ -137,6 +140,7 @@ namespace C3DTools.ViewModels
         public ICommand GetBasinCommand { get; }
         public ICommand LabelBasinCommand { get; }
         public ICommand SwitchTabCommand { get; }
+        public ICommand SwitchBasinsSubTabCommand { get; }
         public ICommand RefreshLandusesCommand { get; }
         public ICommand ClearLanduseSelectionsCommand { get; }
 
@@ -154,12 +158,33 @@ namespace C3DTools.ViewModels
             }
         }
 
+        public string BasinsSubTab
+        {
+            get => _basinsSubTab;
+            set
+            {
+                _basinsSubTab = value;
+                OnPropertyChanged();
+            }
+        }
+
         public string LanduseLayerFilter
         {
             get => _landuseLayerFilter;
             set
             {
                 _landuseLayerFilter = value;
+                OnPropertyChanged();
+                FilterLanduseLayers();
+            }
+        }
+
+        public bool ShowOnlySelected
+        {
+            get => _showOnlySelected;
+            set
+            {
+                _showOnlySelected = value;
                 OnPropertyChanged();
                 FilterLanduseLayers();
             }
@@ -668,6 +693,8 @@ namespace C3DTools.ViewModels
                         {
                             OnPropertyChanged(nameof(SelectedLanduseCount));
                             SyncLanduseLayerToSettings(item.LayerName, item.IsSelected);
+                            if (_showOnlySelected)
+                                FilterLanduseLayers();
                         }
                     };
 
@@ -710,9 +737,13 @@ namespace C3DTools.ViewModels
         {
             FilteredLanduseLayers.Clear();
 
-            var filtered = string.IsNullOrWhiteSpace(_landuseLayerFilter)
-                ? _allLanduseLayers
-                : _allLanduseLayers.Where(l => l.LayerName.Contains(_landuseLayerFilter, System.StringComparison.OrdinalIgnoreCase));
+            IEnumerable<LanduseLayerItem> filtered = _allLanduseLayers;
+
+            if (!string.IsNullOrWhiteSpace(_landuseLayerFilter))
+                filtered = filtered.Where(l => l.LayerName.Contains(_landuseLayerFilter, System.StringComparison.OrdinalIgnoreCase));
+
+            if (_showOnlySelected)
+                filtered = filtered.Where(l => l.IsSelected);
 
             foreach (var layer in filtered)
             {

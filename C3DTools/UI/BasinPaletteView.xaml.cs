@@ -70,4 +70,25 @@ namespace C3DTools.UI
             throw new NotImplementedException();
         }
     }
+
+    /// <summary>
+    /// Returns true when the bound string equals ConverterParameter.
+    /// Used to drive RadioButton.IsChecked from a string property.
+    /// </summary>
+    public class StringEqualityConverter : IValueConverter
+    {
+        public static readonly StringEqualityConverter Instance = new StringEqualityConverter();
+
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            return value?.ToString() == parameter?.ToString();
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            if (value is bool b && b)
+                return parameter?.ToString() ?? string.Empty;
+            return System.Windows.Data.Binding.DoNothing;
+        }
+    }
 }

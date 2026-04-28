@@ -13,6 +13,7 @@
         <!-- Converters -->
         <local:NullToVisibilityConverter x:Key="NullToVisibilityConverter"/>
         <local:InverseNullToVisibilityConverter x:Key="InverseNullToVisibilityConverter"/>
+        <local:StringEqualityConverter x:Key="StringEqualityConverter"/>
 
         <!-- Colors -->
         <SolidColorBrush x:Key="BgPrimary"     Color="#1E1E1E"/>
@@ -22,7 +23,7 @@
         <SolidColorBrush x:Key="BorderInput"   Color="#3D3D3D"/>
         <SolidColorBrush x:Key="TextPrimary"   Color="#E8E8E8"/>
         <SolidColorBrush x:Key="TextMuted"     Color="#B8B8B8"/>
-        <SolidColorBrush x:Key="TextDim"       Color="#888888"/>
+        <SolidColorBrush x:Key="TextDim"       Color="#9A9A9A"/>
         <SolidColorBrush x:Key="AccentBlue"    Color="#0E639C"/>
         <SolidColorBrush x:Key="AccentTeal"    Color="#4EC9B0"/>
         <SolidColorBrush x:Key="AccentGreen"   Color="#3D8B3D"/>
@@ -474,7 +475,7 @@
                             <Run Text="Handle "/>
                             <Run Text="{Binding SelectedBasin.ObjectId.Handle, Mode=OneWay}"/>
                         </TextBlock>
-                        <TextBlock FontSize="10" Foreground="#444444">
+                        <TextBlock FontSize="10" Foreground="{StaticResource TextMuted}">
                             <Run Text="{Binding SelectedBoundary, Mode=OneWay}"/>
                             <Run Text=" · "/>
                             <Run Text="{Binding SelectedDevelopment, Mode=OneWay}"/>
@@ -503,8 +504,6 @@
                     <RadioButton Style="{StaticResource TabButton}" Content="Basins"
                                  IsChecked="True"
                                  Command="{Binding SwitchTabCommand}" CommandParameter="Basins"/>
-                    <RadioButton Style="{StaticResource TabButton}" Content="Untagged"
-                                 Command="{Binding SwitchTabCommand}" CommandParameter="Untagged"/>
                     <RadioButton Style="{StaticResource TabButton}" Content="Landuses"
                                  Command="{Binding SwitchTabCommand}" CommandParameter="Landuses"/>
                     <RadioButton Style="{StaticResource TabButton}" Content="Settings"
@@ -551,105 +550,145 @@
                                     </StackPanel>
                                 </Border>
 
-                                <!-- Tagged Basins List -->
-                                <StackPanel Margin="10">
-                                    <DockPanel Margin="0,0,0,7">
-                                        <Button DockPanel.Dock="Right"
-                                                Content="↻"
-                                                Style="{StaticResource IconButton}"
-                                                Command="{Binding RefreshCommand}"
-                                                ToolTip="Refresh"/>
-                                        <TextBlock Text="TAGGED BASINS" Style="{StaticResource SectionLabel}"
-                                                   VerticalAlignment="Center"/>
-                                    </DockPanel>
+                                <!-- Sub-tab bar: Tagged / Untagged -->
+                                <Border Background="{StaticResource BgPrimary}"
+                                        BorderBrush="{StaticResource BorderMuted}"
+                                        BorderThickness="0,0,0,1">
+                                    <UniformGrid Rows="1">
+                                        <RadioButton Style="{StaticResource TabButton}" Content="Tagged"
+                                                     IsChecked="{Binding BasinsSubTab, Converter={StaticResource StringEqualityConverter}, ConverterParameter=Tagged}"
+                                                     Command="{Binding SwitchBasinsSubTabCommand}" CommandParameter="Tagged"
+                                                     GroupName="BasinsSubTabs"/>
+                                        <RadioButton Style="{StaticResource TabButton}" Content="Untagged"
+                                                     IsChecked="{Binding BasinsSubTab, Converter={StaticResource StringEqualityConverter}, ConverterParameter=Untagged}"
+                                                     Command="{Binding SwitchBasinsSubTabCommand}" CommandParameter="Untagged"
+                                                     GroupName="BasinsSubTabs"/>
+                                    </UniformGrid>
+                                </Border>
 
-                                    <!-- Column headers -->
-                                    <Grid Margin="0,0,0,3">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="0.5*"/>
-                                            <ColumnDefinition Width="0.75*"/>
-                                            <ColumnDefinition Width="0.8*"/>
-                                            <ColumnDefinition Width="1.1*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="ID"    FontSize="10" Foreground="#444444" Padding="2,0" FontWeight="SemiBold"/>
-                                        <TextBlock Grid.Column="1" Text="BOUND" FontSize="10" Foreground="#444444" Padding="2,0" FontWeight="SemiBold"/>
-                                        <TextBlock Grid.Column="2" Text="DEV"   FontSize="10" Foreground="#444444" Padding="2,0" FontWeight="SemiBold"/>
-                                        <TextBlock Grid.Column="3" Text="LAYER" FontSize="10" Foreground="#444444" Padding="2,0" FontWeight="SemiBold"/>
-                                    </Grid>
+                                <!-- Sub-tab content -->
+                                <ContentControl Content="{Binding}">
+                                    <ContentControl.Resources>
 
-                                    <ListBox ItemsSource="{Binding TaggedBasins}"
-                                             SelectedItem="{Binding SelectedTaggedBasin}"
-                                             MinHeight="80" MaxHeight="280">
-                                        <ListBox.ItemTemplate>
-                                            <DataTemplate>
-                                                <Grid Margin="2,5,2,5">
+                                        <!-- Tagged sub-tab -->
+                                        <DataTemplate x:Key="TaggedSubTab">
+                                            <StackPanel Margin="10">
+                                                <DockPanel Margin="0,0,0,7">
+                                                    <Button DockPanel.Dock="Right"
+                                                            Content="↻"
+                                                            Style="{StaticResource IconButton}"
+                                                            Command="{Binding RefreshCommand}"
+                                                            ToolTip="Refresh"/>
+                                                    <TextBlock Text="TAGGED BASINS" Style="{StaticResource SectionLabel}"
+                                                               VerticalAlignment="Center"/>
+                                                </DockPanel>
+
+                                                <!-- Column headers -->
+                                                <Grid Margin="0,0,0,3">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="0.5*"/>
                                                         <ColumnDefinition Width="0.75*"/>
                                                         <ColumnDefinition Width="0.8*"/>
                                                         <ColumnDefinition Width="1.1*"/>
                                                     </Grid.ColumnDefinitions>
-                                                    <TextBlock Grid.Column="0" Text="{Binding BasinId}"
-                                                               Style="{StaticResource IdText}" Padding="6,0"/>
-                                                    <TextBlock Grid.Column="1" Text="{Binding Boundary}"
-                                                               Style="{StaticResource MutedText}" Padding="4,0"/>
-                                                    <TextBlock Grid.Column="2" Text="{Binding Development}"
-                                                               Style="{StaticResource MutedText}" Padding="4,0"/>
-                                                    <TextBlock Grid.Column="3" Text="{Binding Layer}"
-                                                               Style="{StaticResource MutedText}" Padding="4,0"/>
+                                                    <TextBlock Grid.Column="0" Text="ID"    FontSize="10" Foreground="#707070" Padding="2,0" FontWeight="SemiBold"/>
+                                                    <TextBlock Grid.Column="1" Text="BOUND" FontSize="10" Foreground="#707070" Padding="2,0" FontWeight="SemiBold"/>
+                                                    <TextBlock Grid.Column="2" Text="DEV"   FontSize="10" Foreground="#707070" Padding="2,0" FontWeight="SemiBold"/>
+                                                    <TextBlock Grid.Column="3" Text="LAYER" FontSize="10" Foreground="#707070" Padding="2,0" FontWeight="SemiBold"/>
                                                 </Grid>
-                                            </DataTemplate>
-                                        </ListBox.ItemTemplate>
-                                    </ListBox>
 
-                                    <TextBlock Text="{Binding TaggedBasins.Count, StringFormat='Count: {0}'}"
-                                               Foreground="{StaticResource TextDim}" FontSize="10"
-                                               Margin="0,5,0,0"/>
-                                </StackPanel>
-                            </StackPanel>
-                        </DataTemplate>
+                                                <ListBox ItemsSource="{Binding TaggedBasins}"
+                                                         SelectedItem="{Binding SelectedTaggedBasin}"
+                                                         MinHeight="80" MaxHeight="280">
+                                                    <ListBox.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Grid Margin="2,5,2,5">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="0.5*"/>
+                                                                    <ColumnDefinition Width="0.75*"/>
+                                                                    <ColumnDefinition Width="0.8*"/>
+                                                                    <ColumnDefinition Width="1.1*"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <TextBlock Grid.Column="0" Text="{Binding BasinId}"
+                                                                           Style="{StaticResource IdText}" Padding="6,0"/>
+                                                                <TextBlock Grid.Column="1" Text="{Binding Boundary}"
+                                                                           Style="{StaticResource MutedText}" Padding="4,0"/>
+                                                                <TextBlock Grid.Column="2" Text="{Binding Development}"
+                                                                           Style="{StaticResource MutedText}" Padding="4,0"/>
+                                                                <TextBlock Grid.Column="3" Text="{Binding Layer}"
+                                                                           Style="{StaticResource MutedText}" Padding="4,0"/>
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ListBox.ItemTemplate>
+                                                </ListBox>
 
-                        <!-- ─── UNTAGGED TAB ─── -->
-                        <DataTemplate x:Key="UntaggedTab">
-                            <StackPanel Margin="10">
-                                <DockPanel Margin="0,0,0,7">
-                                    <Button DockPanel.Dock="Right"
-                                            Content="↻"
-                                            Style="{StaticResource IconButton}"
-                                            Command="{Binding RefreshCommand}"
-                                            ToolTip="Refresh"/>
-                                    <TextBlock Text="UNTAGGED BASINS" Style="{StaticResource SectionLabel}"
-                                               VerticalAlignment="Center"/>
-                                </DockPanel>
-
-                                <DockPanel Margin="0,0,0,8">
-                                    <TextBlock DockPanel.Dock="Left" Text="Layer"
-                                               FontSize="11" Foreground="{StaticResource TextDim}"
-                                               VerticalAlignment="Center" Margin="0,0,6,0"/>
-                                    <ComboBox ItemsSource="{Binding AvailableLayers}"
-                                              SelectedItem="{Binding SelectedLayer}"/>
-                                </DockPanel>
-
-                                <ListBox ItemsSource="{Binding UntaggedBasins}"
-                                         SelectedItem="{Binding SelectedUntaggedBasin}"
-                                         MinHeight="80" MaxHeight="360">
-                                    <ListBox.ItemTemplate>
-                                        <DataTemplate>
-                                            <StackPanel Margin="8,5">
-                                                <TextBlock Text="{Binding Handle}"
-                                                           Foreground="#9CDCFE" FontSize="11"/>
-                                                <TextBlock Text="{Binding Layer}"
-                                                           Foreground="{StaticResource TextDim}" FontSize="10"/>
+                                                <TextBlock Text="{Binding TaggedBasins.Count, StringFormat='Count: {0}'}"
+                                                           Foreground="{StaticResource TextDim}" FontSize="10"
+                                                           Margin="0,5,0,0"/>
                                             </StackPanel>
                                         </DataTemplate>
-                                    </ListBox.ItemTemplate>
-                                </ListBox>
 
-                                <TextBlock Text="{Binding UntaggedBasins.Count, StringFormat='Count: {0}'}"
-                                           Foreground="{StaticResource TextDim}" FontSize="10"
-                                           Margin="0,5,0,0"/>
+                                        <!-- Untagged sub-tab -->
+                                        <DataTemplate x:Key="UntaggedSubTab">
+                                            <StackPanel Margin="10">
+                                                <DockPanel Margin="0,0,0,7">
+                                                    <Button DockPanel.Dock="Right"
+                                                            Content="↻"
+                                                            Style="{StaticResource IconButton}"
+                                                            Command="{Binding RefreshCommand}"
+                                                            ToolTip="Refresh"/>
+                                                    <TextBlock Text="UNTAGGED BASINS" Style="{StaticResource SectionLabel}"
+                                                               VerticalAlignment="Center"/>
+                                                </DockPanel>
+
+                                                <DockPanel Margin="0,0,0,8">
+                                                    <TextBlock DockPanel.Dock="Left" Text="Layer"
+                                                               FontSize="11" Foreground="{StaticResource TextDim}"
+                                                               VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                                    <ComboBox ItemsSource="{Binding AvailableLayers}"
+                                                              SelectedItem="{Binding SelectedLayer}"/>
+                                                </DockPanel>
+
+                                                <ListBox ItemsSource="{Binding UntaggedBasins}"
+                                                         SelectedItem="{Binding SelectedUntaggedBasin}"
+                                                         MinHeight="80" MaxHeight="280">
+                                                    <ListBox.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <StackPanel Margin="8,5">
+                                                                <TextBlock Text="{Binding Handle}"
+                                                                           Foreground="#9CDCFE" FontSize="11"/>
+                                                                <TextBlock Text="{Binding Layer}"
+                                                                           Foreground="{StaticResource TextDim}" FontSize="10"/>
+                                                            </StackPanel>
+                                                        </DataTemplate>
+                                                    </ListBox.ItemTemplate>
+                                                </ListBox>
+
+                                                <TextBlock Text="{Binding UntaggedBasins.Count, StringFormat='Count: {0}'}"
+                                                           Foreground="{StaticResource TextDim}" FontSize="10"
+                                                           Margin="0,5,0,0"/>
+                                            </StackPanel>
+                                        </DataTemplate>
+
+                                    </ContentControl.Resources>
+
+                                    <ContentControl.Style>
+                                        <Style TargetType="ContentControl">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding BasinsSubTab}" Value="Tagged">
+                                                    <Setter Property="ContentTemplate" Value="{StaticResource TaggedSubTab}"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding BasinsSubTab}" Value="Untagged">
+                                                    <Setter Property="ContentTemplate" Value="{StaticResource UntaggedSubTab}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </ContentControl.Style>
+                                </ContentControl>
                             </StackPanel>
                         </DataTemplate>
+
+                        <!-- ─── UNTAGGED TAB (removed - merged into Basins) ─── -->
 
                         <!-- ─── LANDUSES TAB ─── -->
                         <DataTemplate x:Key="LandusesTab">
@@ -693,6 +732,13 @@
                                         </Style>
                                     </TextBox.Style>
                                 </TextBox>
+
+                                <!-- Show selected only toggle -->
+                                <CheckBox Content="Show selected only"
+                                          IsChecked="{Binding ShowOnlySelected, Mode=TwoWay}"
+                                          Margin="0,0,0,7"
+                                          Foreground="{StaticResource TextMuted}"
+                                          FontSize="11"/>
 
                                 <!-- Layer list with checkboxes -->
                                 <ListBox ItemsSource="{Binding FilteredLanduseLayers}"
@@ -884,10 +930,6 @@
                                 <DataTrigger Binding="{Binding ActiveTab}" Value="Basins">
                                     <Setter Property="ContentTemplate"
                                             Value="{StaticResource BasinsTab}"/>
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding ActiveTab}" Value="Untagged">
-                                    <Setter Property="ContentTemplate"
-                                            Value="{StaticResource UntaggedTab}"/>
                                 </DataTrigger>
                                 <DataTrigger Binding="{Binding ActiveTab}" Value="Landuses">
                                     <Setter Property="ContentTemplate"
