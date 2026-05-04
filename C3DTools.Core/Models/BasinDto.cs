@@ -8,7 +8,6 @@ namespace C3DTools.Core.Models
     {
         public string? BasinId { get; set; }
         public string? Layer { get; set; }
-        public string Boundary { get; set; } = string.Empty;
         public string Development { get; set; } = string.Empty;
         public bool IsTagged => !string.IsNullOrWhiteSpace(BasinId);
 
@@ -21,7 +20,6 @@ namespace C3DTools.Core.Models
                     var parts = new List<string>();
                     if (!string.IsNullOrEmpty(Development)) parts.Add(Development);
                     parts.Add(BasinId!);
-                    if (!string.IsNullOrEmpty(Boundary)) parts.Add(Boundary);
                     return string.Join(" ", parts);
                 }
                 return "[Untagged]";

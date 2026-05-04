@@ -25,14 +25,11 @@ namespace C3DTools.ViewModels
         private BasinInfo? _selectedUntaggedBasin;
         private bool _suppressSelectionSync;
         private string _newBasinId = string.Empty;
-        private string _selectedBoundary = "None";
         private string _selectedDevelopment = string.Empty;
         private string _selectedLayer = "All Layers";
         private List<BasinInfo> _allUntaggedBasins = new List<BasinInfo>();
 
         // Settings fields
-        private string _onsiteLayer = "CALC-BASN-ONSITE";
-        private string _offsiteLayer = "CALC-BASN-OFFSITE";
         private string _newLayerPattern = string.Empty;
         private string? _selectedLayerPattern;
         private AreaUnit _areaUnit = AreaUnit.SquareFeet;
@@ -48,11 +45,11 @@ namespace C3DTools.ViewModels
             TaggedBasins = new ObservableCollection<BasinInfo>();
             UntaggedBasins = new ObservableCollection<BasinInfo>();
             AvailableLayers = new ObservableCollection<string>();
-            BoundaryOptions = new ObservableCollection<string> { "", "ONSITE", "OFFSITE" };
             DevelopmentOptions = new ObservableCollection<string> { "", "Pre", "Post" };
             LanduseHatchLayers = new ObservableCollection<string>();
 
             TagBasinCommand = new RelayCommand(ExecuteTagBasin, CanExecuteTagBasin);
+            UntagBasinCommand = new RelayCommand(ExecuteUntagBasin, CanExecuteUntagBasin);
             SelectBasinItemCommand = new RelayCommand<BasinInfo>(ExecuteSelectBasinItem);
             RefreshCommand = new RelayCommand(ExecuteRefresh);
 
@@ -72,6 +69,8 @@ namespace C3DTools.ViewModels
 
             FilteredLanduseLayers = new ObservableCollection<LanduseLayerItem>();
 
+            MasksViewModel = new MasksPaletteViewModel();
+
             // Subscribe to document activation to reload settings when the user switches drawings
             Application.DocumentManager.DocumentActivated += OnDocumentActivated;
             Application.DocumentManager.DocumentCreated += OnDocumentActivated;
@@ -82,10 +81,12 @@ namespace C3DTools.ViewModels
 
         public event PropertyChangedEventHandler? PropertyChanged;
 
+        /// <summary>ViewModel for the Masks palette tab.</summary>
+        public MasksPaletteViewModel MasksViewModel { get; }
+
         public ObservableCollection<BasinInfo> TaggedBasins { get; }
         public ObservableCollection<BasinInfo> UntaggedBasins { get; }
         public ObservableCollection<string> AvailableLayers { get; }
-        public ObservableCollection<string> BoundaryOptions { get; }
         public ObservableCollection<string> DevelopmentOptions { get; }
 
         // ── Settings ──────────────────────────────────────────────────────────────
@@ -95,18 +96,6 @@ namespace C3DTools.ViewModels
         /// Supports wildcards (* and ?).
         /// </summary>
         public ObservableCollection<string> LanduseHatchLayers { get; }
-
-        public string OnsiteLayer
-        {
-            get => _onsiteLayer;
-            set { _onsiteLayer = value; OnPropertyChanged(); PushToCache(); }
-        }
-
-        public string OffsiteLayer
-        {
-            get => _offsiteLayer;
-            set { _offsiteLayer = value; OnPropertyChanged(); PushToCache(); }
-        }
 
         public string NewLayerPattern
         {
@@ -229,20 +218,6 @@ namespace C3DTools.ViewModels
                 // Populate the edit fields with current values
                 NewBasinId = value?.BasinId ?? string.Empty;
 
-                // Normalize boundary to match available options (case-insensitive)
-                string boundaryValue = value?.Boundary ?? string.Empty;
-                if (!string.IsNullOrWhiteSpace(boundaryValue))
-                {
-                    // Match to available options case-insensitively
-                    var matchingOption = BoundaryOptions.FirstOrDefault(
-                        opt => opt.Equals(boundaryValue, System.StringComparison.OrdinalIgnoreCase));
-                    SelectedBoundary = matchingOption ?? string.Empty;
-                }
-                else
-                {
-                    SelectedBoundary = string.Empty;
-                }
-
                 // Normalize development to match available options (case-insensitive)
                 string developmentValue = value?.Development ?? string.Empty;
                 if (!string.IsNullOrWhiteSpace(developmentValue))
@@ -259,16 +234,7 @@ namespace C3DTools.ViewModels
 
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(TagButtonText));
-            }
-        }
-
-        public string SelectedBoundary
-        {
-            get => _selectedBoundary;
-            set
-            {
-                _selectedBoundary = value;
-                OnPropertyChanged();
+                ((RelayCommand)UntagBasinCommand).RaiseCanExecuteChanged();
             }
         }
 
@@ -358,6 +324,7 @@ namespace C3DTools.ViewModels
         }
 
         public ICommand TagBasinCommand { get; }
+        public ICommand UntagBasinCommand { get; }
         public ICommand SelectBasinItemCommand { get; }
         public ICommand RefreshCommand { get; }
 
@@ -460,6 +427,22 @@ namespace C3DTools.ViewModels
             return SelectedBasin != null && !string.IsNullOrWhiteSpace(NewBasinId);
         }
 
+        private bool CanExecuteUntagBasin()
+        {
+            return SelectedBasin?.IsTagged == true;
+        }
+
+        private void ExecuteUntagBasin()
+        {
+            var doc = Application.DocumentManager.MdiActiveDocument;
+            if (doc == null || SelectedBasin == null) return;
+
+            string oldId = SelectedBasin.BasinId ?? string.Empty;
+            _dataService.UntagBasin(doc, SelectedBasin.ObjectId);
+            doc.Editor.WriteMessage($"\nBasin '{oldId}' untagged.");
+            RefreshData();
+        }
+
         private void ExecuteTagBasin()
         {
             var doc = Application.DocumentManager.MdiActiveDocument;
@@ -467,10 +450,9 @@ namespace C3DTools.ViewModels
                 return;
 
             string oldId = SelectedBasin.BasinId ?? "[Untagged]";
-            _dataService.TagBasin(doc, SelectedBasin.ObjectId, NewBasinId, SelectedBoundary, SelectedDevelopment);
+            _dataService.TagBasin(doc, SelectedBasin.ObjectId, NewBasinId, SelectedDevelopment);
 
-            // Show message in command line
-            doc.Editor.WriteMessage($"\nBasin updated: {oldId} → {NewBasinId} (Boundary: {SelectedBoundary}, Dev: {SelectedDevelopment})");
+            doc.Editor.WriteMessage($"\nBasin updated: {oldId} → {NewBasinId} (Dev: {SelectedDevelopment})");
 
             RefreshData();
         }
@@ -511,8 +493,6 @@ namespace C3DTools.ViewModels
                 ? new SettingsResolver().Resolve(doc.Database)
                 : _globalSettings.Load();
 
-            OnsiteLayer = settings.OnsiteLayer;
-            OffsiteLayer = settings.OffsiteLayer;
             _areaUnit = settings.AreaUnit;
             OnPropertyChanged(nameof(SelectedAreaUnit));
             LanduseHatchLayers.Clear();
@@ -525,12 +505,11 @@ namespace C3DTools.ViewModels
         private void OnDocumentActivated(object sender, DocumentCollectionEventArgs e)
         {
             LoadSettingsForActiveDocument();
+            MasksViewModel.RefreshMasks();
         }
 
         private BasinSettings BuildSettingsFromUi() => new BasinSettings
         {
-            OnsiteLayer = OnsiteLayer,
-            OffsiteLayer = OffsiteLayer,
             LanduseHatchLayers = new List<string>(LanduseHatchLayers),
             AreaUnit = _areaUnit
         };
@@ -611,9 +590,9 @@ namespace C3DTools.ViewModels
             {
                 ActiveTab = tabName;
                 if (tabName == "Landuses")
-                {
                     RefreshLanduseLayers();
-                }
+                else if (tabName == "Masks")
+                    MasksViewModel.RefreshMasks();
             }
         }
 

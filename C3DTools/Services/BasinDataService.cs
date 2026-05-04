@@ -43,7 +43,7 @@ namespace C3DTools.Services
                         Layer = pline.Layer
                     };
 
-                    // Read basin XData: [AppName, BasinId, Boundary, Development]
+                    // Read basin XData: [AppName, BasinId, Development]
                     ResultBuffer? rb = pline.GetXDataForApplication(AppNameBasin);
                     if (rb != null)
                     {
@@ -55,16 +55,10 @@ namespace C3DTools.Services
                             basin.BasinId = values[1].Value?.ToString();
                         }
 
-                        // Boundary (index 2)
+                        // Development (index 2)
                         if (values.Length > 2 && values[2].TypeCode == (int)DxfCode.ExtendedDataAsciiString)
                         {
-                            basin.Boundary = values[2].Value?.ToString() ?? string.Empty;
-                        }
-
-                        // Development (index 3)
-                        if (values.Length > 3 && values[3].TypeCode == (int)DxfCode.ExtendedDataAsciiString)
-                        {
-                            basin.Development = values[3].Value?.ToString() ?? string.Empty;
+                            basin.Development = values[2].Value?.ToString() ?? string.Empty;
                         }
 
                         rb.Dispose();
@@ -113,7 +107,7 @@ namespace C3DTools.Services
                         Layer = pline.Layer
                     };
 
-                    // Read basin XData: [AppName, BasinId, Boundary, Development]
+                    // Read basin XData: [AppName, BasinId, Development]
                     ResultBuffer? rb = pline.GetXDataForApplication(AppNameBasin);
                     if (rb != null)
                     {
@@ -125,16 +119,10 @@ namespace C3DTools.Services
                             basin.BasinId = values[1].Value?.ToString();
                         }
 
-                        // Boundary (index 2)
+                        // Development (index 2)
                         if (values.Length > 2 && values[2].TypeCode == (int)DxfCode.ExtendedDataAsciiString)
                         {
-                            basin.Boundary = values[2].Value?.ToString() ?? string.Empty;
-                        }
-
-                        // Development (index 3)
-                        if (values.Length > 3 && values[3].TypeCode == (int)DxfCode.ExtendedDataAsciiString)
-                        {
-                            basin.Development = values[3].Value?.ToString() ?? string.Empty;
+                            basin.Development = values[2].Value?.ToString() ?? string.Empty;
                         }
 
                         rb.Dispose();
@@ -147,9 +135,9 @@ namespace C3DTools.Services
         }
 
         /// <summary>
-        /// Tags a polyline with basin attributes (ID, Boundary, Development).
+        /// Tags a polyline with basin attributes (ID, Development).
         /// </summary>
-        public bool TagBasin(Document doc, ObjectId polylineId, string basinId, string boundary, string development)
+        public bool TagBasin(Document doc, ObjectId polylineId, string basinId, string development)
         {
             using (DocumentLock docLock = doc.LockDocument())
             using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
@@ -169,10 +157,40 @@ namespace C3DTools.Services
                 ResultBuffer rb = new ResultBuffer(
                     new TypedValue((int)DxfCode.ExtendedDataRegAppName, AppNameBasin),
                     new TypedValue((int)DxfCode.ExtendedDataAsciiString, basinId),
-                    new TypedValue((int)DxfCode.ExtendedDataAsciiString, boundary),
                     new TypedValue((int)DxfCode.ExtendedDataAsciiString, development)
                 );
 
+                pline.XData = rb;
+                rb.Dispose();
+
+                tr.Commit();
+                return true;
+            }
+        }
+
+        /// <summary>
+        /// Removes the basin tag (XData) from the specified polyline.
+        /// </summary>
+        public bool UntagBasin(Document doc, ObjectId polylineId)
+        {
+            using (DocumentLock docLock = doc.LockDocument())
+            using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
+            {
+                Polyline pline = (Polyline)tr.GetObject(polylineId, OpenMode.ForWrite);
+
+                // Setting XData to a ResultBuffer containing only the AppName entry removes all data for that app
+                ResultBuffer? existing = pline.GetXDataForApplication(AppNameBasin);
+                if (existing == null)
+                {
+                    tr.Commit();
+                    return false;
+                }
+                existing.Dispose();
+
+                // Null out the xdata by writing only the app name — AutoCAD removes the record
+                ResultBuffer rb = new ResultBuffer(
+                    new TypedValue((int)DxfCode.ExtendedDataRegAppName, AppNameBasin)
+                );
                 pline.XData = rb;
                 rb.Dispose();
 

@@ -54,6 +54,24 @@ namespace C3DTools.UI
     }
 
     /// <summary>
+    /// Converts true to Visibility.Visible, false to Visibility.Collapsed.
+    /// </summary>
+    public class BoolToVisibilityConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            if (value is bool boolValue)
+                return boolValue ? Visibility.Visible : Visibility.Collapsed;
+            return Visibility.Collapsed;
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            throw new NotImplementedException();
+        }
+    }
+
+    /// <summary>
     /// Converts false to Visibility.Visible, true to Visibility.Collapsed.
     /// </summary>
     public class InverseBoolToVisibilityConverter : IValueConverter

@@ -13,11 +13,6 @@ namespace C3DTools.Models
         public string? Layer { get; set; }
 
         /// <summary>
-        /// Boundary attribute: "ONSITE", "OFFSITE", or empty string
-        /// </summary>
-        public string Boundary { get; set; } = string.Empty;
-
-        /// <summary>
         /// Development stage: "Pre", "Post", or empty string
         /// </summary>
         public string Development { get; set; } = string.Empty;
@@ -35,9 +30,6 @@ namespace C3DTools.Models
                         parts.Add(Development);
 
                     parts.Add(BasinId!);
-
-                    if (!string.IsNullOrEmpty(Boundary))
-                        parts.Add(Boundary);
 
                     return string.Join(" ", parts);
                 }

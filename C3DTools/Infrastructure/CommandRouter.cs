@@ -43,9 +43,8 @@ namespace C3DTools.Infrastructure
             var basins = _basinService.GetAllBasins(doc);
             var dtos = basins.Select(b => new BasinDto
             {
-                BasinId    = b.BasinId,
-                Layer      = b.Layer,
-                Boundary   = b.Boundary,
+                BasinId     = b.BasinId,
+                Layer       = b.Layer,
                 Development = b.Development
             }).ToList();
 
@@ -71,7 +70,6 @@ namespace C3DTools.Infrastructure
             {
                 BasinId     = match.BasinId,
                 Layer       = match.Layer,
-                Boundary    = match.Boundary,
                 Development = match.Development
             };
 

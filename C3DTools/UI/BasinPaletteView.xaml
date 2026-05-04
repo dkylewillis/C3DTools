@@ -14,6 +14,7 @@
         <local:NullToVisibilityConverter x:Key="NullToVisibilityConverter"/>
         <local:InverseNullToVisibilityConverter x:Key="InverseNullToVisibilityConverter"/>
         <local:StringEqualityConverter x:Key="StringEqualityConverter"/>
+        <local:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
 
         <!-- Colors -->
         <SolidColorBrush x:Key="BgPrimary"     Color="#1E1E1E"/>
@@ -476,9 +477,7 @@
                             <Run Text="{Binding SelectedBasin.ObjectId.Handle, Mode=OneWay}"/>
                         </TextBlock>
                         <TextBlock FontSize="10" Foreground="{StaticResource TextMuted}">
-                            <Run Text="{Binding SelectedBoundary, Mode=OneWay}"/>
-                            <Run Text=" · "/>
-                            <Run Text="{Binding SelectedDevelopment, Mode=OneWay}"/>
+                             <Run Text="{Binding SelectedDevelopment, Mode=OneWay}"/>
                         </TextBlock>
                     </StackPanel>
                 </DockPanel>
@@ -506,6 +505,8 @@
                                  Command="{Binding SwitchTabCommand}" CommandParameter="Basins"/>
                     <RadioButton Style="{StaticResource TabButton}" Content="Landuses"
                                  Command="{Binding SwitchTabCommand}" CommandParameter="Landuses"/>
+                    <RadioButton Style="{StaticResource TabButton}" Content="Masks"
+                                 Command="{Binding SwitchTabCommand}" CommandParameter="Masks"/>
                     <RadioButton Style="{StaticResource TabButton}" Content="Settings"
                                  Command="{Binding SwitchTabCommand}" CommandParameter="Settings"/>
                     <RadioButton Style="{StaticResource TabButton}" Content="Commands"
@@ -532,21 +533,28 @@
                                                    Margin="0,0,0,3"/>
                                         <TextBox Text="{Binding NewBasinId, UpdateSourceTrigger=PropertyChanged}"
                                                  Margin="0,0,0,6"/>
-                                        <TextBlock Text="Boundary" Style="{StaticResource FieldLabel}"
-                                                   Margin="0,0,0,3"/>
-                                        <ComboBox ItemsSource="{Binding BoundaryOptions}"
-                                                  SelectedItem="{Binding SelectedBoundary, Mode=TwoWay}"
-                                                  Margin="0,0,0,6"/>
                                         <TextBlock Text="Development" Style="{StaticResource FieldLabel}"
                                                    Margin="0,0,0,3"/>
                                         <ComboBox ItemsSource="{Binding DevelopmentOptions}"
                                                   SelectedItem="{Binding SelectedDevelopment, Mode=TwoWay}"
                                                   Margin="0,0,0,0"/>
-                                        <Button Content="{Binding TagButtonText}"
-                                                Command="{Binding TagBasinCommand}"
-                                                Style="{StaticResource PrimaryButton}"
-                                                HorizontalAlignment="Stretch"
-                                                Margin="0,9,0,0"/>
+                                        <Grid Margin="0,9,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="8"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Button Grid.Column="0"
+                                                    Content="{Binding TagButtonText}"
+                                                    Command="{Binding TagBasinCommand}"
+                                                    Style="{StaticResource PrimaryButton}"
+                                                    HorizontalAlignment="Stretch"/>
+                                            <Button Grid.Column="2"
+                                                    Content="Untag"
+                                                    Command="{Binding UntagBasinCommand}"
+                                                    Style="{StaticResource SecondaryButton}"
+                                                    ToolTip="Remove basin tag from selected polyline"/>
+                                        </Grid>
                                     </StackPanel>
                                 </Border>
 
@@ -587,14 +595,12 @@
                                                 <Grid Margin="0,0,0,3">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="0.5*"/>
-                                                        <ColumnDefinition Width="0.75*"/>
-                                                        <ColumnDefinition Width="0.8*"/>
+                                                        <ColumnDefinition Width="0.9*"/>
                                                         <ColumnDefinition Width="1.1*"/>
                                                     </Grid.ColumnDefinitions>
                                                     <TextBlock Grid.Column="0" Text="ID"    FontSize="10" Foreground="#707070" Padding="2,0" FontWeight="SemiBold"/>
-                                                    <TextBlock Grid.Column="1" Text="BOUND" FontSize="10" Foreground="#707070" Padding="2,0" FontWeight="SemiBold"/>
-                                                    <TextBlock Grid.Column="2" Text="DEV"   FontSize="10" Foreground="#707070" Padding="2,0" FontWeight="SemiBold"/>
-                                                    <TextBlock Grid.Column="3" Text="LAYER" FontSize="10" Foreground="#707070" Padding="2,0" FontWeight="SemiBold"/>
+                                                    <TextBlock Grid.Column="1" Text="DEV"   FontSize="10" Foreground="#707070" Padding="2,0" FontWeight="SemiBold"/>
+                                                    <TextBlock Grid.Column="2" Text="LAYER" FontSize="10" Foreground="#707070" Padding="2,0" FontWeight="SemiBold"/>
                                                 </Grid>
 
                                                 <ListBox ItemsSource="{Binding TaggedBasins}"
@@ -605,17 +611,14 @@
                                                             <Grid Margin="2,5,2,5">
                                                                 <Grid.ColumnDefinitions>
                                                                     <ColumnDefinition Width="0.5*"/>
-                                                                    <ColumnDefinition Width="0.75*"/>
-                                                                    <ColumnDefinition Width="0.8*"/>
+                                                                    <ColumnDefinition Width="0.9*"/>
                                                                     <ColumnDefinition Width="1.1*"/>
                                                                 </Grid.ColumnDefinitions>
                                                                 <TextBlock Grid.Column="0" Text="{Binding BasinId}"
                                                                            Style="{StaticResource IdText}" Padding="6,0"/>
-                                                                <TextBlock Grid.Column="1" Text="{Binding Boundary}"
+                                                                <TextBlock Grid.Column="1" Text="{Binding Development}"
                                                                            Style="{StaticResource MutedText}" Padding="4,0"/>
-                                                                <TextBlock Grid.Column="2" Text="{Binding Development}"
-                                                                           Style="{StaticResource MutedText}" Padding="4,0"/>
-                                                                <TextBlock Grid.Column="3" Text="{Binding Layer}"
+                                                                <TextBlock Grid.Column="2" Text="{Binding Layer}"
                                                                            Style="{StaticResource MutedText}" Padding="4,0"/>
                                                             </Grid>
                                                         </DataTemplate>
@@ -817,20 +820,197 @@
                             </StackPanel>
                         </DataTemplate>
 
+                        <!-- ─── MASKS TAB ─── -->
+                        <DataTemplate x:Key="MasksTab">
+                            <StackPanel DataContext="{Binding MasksViewModel}">
+
+                                <!-- ── Add new mask form ── -->
+                                <Border BorderBrush="{StaticResource Separator}"
+                                        BorderThickness="0,0,0,1" Padding="10">
+                                    <StackPanel>
+                                        <TextBlock Text="ADD MASK" Style="{StaticResource SectionLabel}" Margin="0,0,0,7"/>
+
+                                        <TextBlock Text="Name" Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
+                                        <TextBox Text="{Binding NewMaskName, UpdateSourceTrigger=PropertyChanged}"
+                                                 Margin="0,0,0,6"/>
+
+                                        <TextBlock Text="Layer prefix" Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
+                                        <TextBox Text="{Binding NewLayerPrefix, UpdateSourceTrigger=PropertyChanged}"
+                                                 Margin="0,0,0,6"/>
+
+                                        <Grid Margin="0,0,0,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="8"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="Inside label" Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
+                                                <TextBox Text="{Binding NewInsideLabel, UpdateSourceTrigger=PropertyChanged}"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock Text="Outside label" Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
+                                                <TextBox Text="{Binding NewOutsideLabel, UpdateSourceTrigger=PropertyChanged}"/>
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <!-- Layer preview -->
+                                        <Border Background="{StaticResource BgSurface}"
+                                                BorderBrush="{StaticResource BorderMuted}"
+                                                BorderThickness="1" Padding="6,5" Margin="0,0,0,6">
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding NewInsideLayerPreview}"
+                                                           Foreground="#81C784" FontSize="10" FontFamily="Consolas"/>
+                                                <TextBlock Text="{Binding NewOutsideLayerPreview}"
+                                                           Foreground="{StaticResource AccentRed}" FontSize="10" FontFamily="Consolas"/>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <CheckBox Content="Generate geometry when SPLITBASINS runs"
+                                                  IsChecked="{Binding NewGenerateGeometry, Mode=TwoWay}"
+                                                  Foreground="{StaticResource TextMuted}" FontSize="11"
+                                                  Margin="0,0,0,8"/>
+
+                                        <!-- Pick status -->
+                                        <Border Background="{StaticResource BgSurface}"
+                                                BorderBrush="{StaticResource BorderMuted}"
+                                                BorderThickness="1" Padding="6,4" Margin="0,0,0,6">
+                                            <TextBlock Text="{Binding PendingHandleDisplay}"
+                                                       Foreground="{StaticResource AccentAmber}"
+                                                       FontSize="10" FontFamily="Consolas"/>
+                                        </Border>
+
+                                        <DockPanel>
+                                            <Button DockPanel.Dock="Left"
+                                                    Content="Pick polyline"
+                                                    Command="{Binding PickPolylineCommand}"
+                                                    Style="{StaticResource SecondaryButton}"
+                                                    Margin="0,0,6,0"/>
+                                            <Button Content="Add mask"
+                                                    Command="{Binding AddMaskCommand}"
+                                                    Style="{StaticResource PrimaryButton}"
+                                                    HorizontalAlignment="Stretch"/>
+                                        </DockPanel>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- ── Mask list ── -->
+                                <StackPanel Margin="10">
+                                    <DockPanel Margin="0,0,0,7">
+                                        <Button DockPanel.Dock="Right"
+                                                Content="↻" Style="{StaticResource IconButton}"
+                                                Command="{Binding RefreshCommand}" ToolTip="Refresh"/>
+                                        <TextBlock Text="SAVED MASKS" Style="{StaticResource SectionLabel}"
+                                                   VerticalAlignment="Center"/>
+                                    </DockPanel>
+
+                                    <ListBox ItemsSource="{Binding Masks}"
+                                             SelectedItem="{Binding SelectedMask}"
+                                             MinHeight="60" MaxHeight="300">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Margin="8,6">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel Grid.Column="0">
+                                                        <DockPanel>
+                                                            <!-- Generate geometry indicator -->
+                                                            <TextBlock DockPanel.Dock="Right"
+                                                                       Text="⚙"
+                                                                       Foreground="{StaticResource AccentTeal}"
+                                                                       FontSize="10"
+                                                                       ToolTip="Generate geometry enabled"
+                                                                       Margin="4,0,0,0"
+                                                                       Visibility="{Binding GenerateGeometry, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                                            <TextBlock Text="{Binding Name}"
+                                                                       Style="{StaticResource IdText}"/>
+                                                        </DockPanel>
+                                                        <TextBlock Text="{Binding InsideLayerName}"
+                                                                   Foreground="#81C784" FontSize="10" FontFamily="Consolas"/>
+                                                        <TextBlock Text="{Binding OutsideLayerName}"
+                                                                   Foreground="{StaticResource AccentRed}" FontSize="10" FontFamily="Consolas"/>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+
+                                    <!-- Edit selected mask -->
+                                    <Border Margin="0,8,0,0"
+                                            Visibility="{Binding SelectedMask, Converter={StaticResource NullToVisibilityConverter}}">
+                                        <StackPanel>
+                                            <TextBlock Text="EDIT SELECTED" Style="{StaticResource SectionLabel}" Margin="0,0,0,7"/>
+
+                                            <TextBlock Text="Layer prefix" Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
+                                            <TextBox Text="{Binding SelectedMask.LayerPrefix, UpdateSourceTrigger=PropertyChanged}"
+                                                     Margin="0,0,0,6"/>
+
+                                            <Grid Margin="0,0,0,6">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="8"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0">
+                                                    <TextBlock Text="Inside label" Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
+                                                    <TextBox Text="{Binding SelectedMask.InsideLabel, UpdateSourceTrigger=PropertyChanged}"/>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="2">
+                                                    <TextBlock Text="Outside label" Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
+                                                    <TextBox Text="{Binding SelectedMask.OutsideLabel, UpdateSourceTrigger=PropertyChanged}"/>
+                                                </StackPanel>
+                                            </Grid>
+
+                                            <CheckBox Content="Generate geometry when SPLITBASINS runs"
+                                                      IsChecked="{Binding SelectedMask.GenerateGeometry, Mode=TwoWay}"
+                                                      Foreground="{StaticResource TextMuted}" FontSize="11"
+                                                      Margin="0,0,0,8"/>
+
+                                            <Border Background="{StaticResource BgSurface}"
+                                                    BorderBrush="{StaticResource BorderMuted}"
+                                                    BorderThickness="1" Padding="6,5" Margin="0,0,0,8">
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding SelectedMask.InsideLayerName}"
+                                                               Foreground="#81C784" FontSize="10" FontFamily="Consolas"/>
+                                                    <TextBlock Text="{Binding SelectedMask.OutsideLayerName}"
+                                                               Foreground="{StaticResource AccentRed}" FontSize="10" FontFamily="Consolas"/>
+                                                </StackPanel>
+                                            </Border>
+
+                                            <DockPanel>
+                                                <Button DockPanel.Dock="Right"
+                                                        Content="Remove"
+                                                        Command="{Binding RemoveMaskCommand}"
+                                                        Style="{StaticResource DangerButton}"
+                                                        Margin="6,0,0,0"/>
+                                                <Button Content="Save changes"
+                                                        Command="{Binding SaveMaskChangesCommand}"
+                                                        Style="{StaticResource SecondaryButton}"
+                                                        HorizontalAlignment="Stretch"/>
+                                            </DockPanel>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Run split hint -->
+                                    <Border Background="{StaticResource BgSurface}"
+                                            BorderBrush="{StaticResource BorderMuted}"
+                                            BorderThickness="1" Padding="8,6"
+                                            Margin="0,12,0,0">
+                                        <TextBlock TextWrapping="Wrap" FontSize="10"
+                                                   Foreground="{StaticResource TextDim}">
+                                            To generate split geometry, enable "Generate geometry" on a mask,
+                                            then run SPLITBASINS from the Commands tab or the command line.
+                                        </TextBlock>
+                                    </Border>
+                                </StackPanel>
+                            </StackPanel>
+                        </DataTemplate>
+
                         <!-- ─── SETTINGS TAB ─── -->
                         <DataTemplate x:Key="SettingsTab">
                             <StackPanel Margin="10">
-                                <TextBlock Text="Split basins layers" Style="{StaticResource GroupLabel}"
-                                           Margin="0,0,0,5"/>
-                                <TextBlock Text="Onsite layer" Style="{StaticResource FieldLabel}"
-                                           Margin="0,0,0,3"/>
-                                <TextBox Text="{Binding OnsiteLayer, UpdateSourceTrigger=PropertyChanged}"
-                                         Margin="0,0,0,6"/>
-                                <TextBlock Text="Offsite layer" Style="{StaticResource FieldLabel}"
-                                           Margin="0,0,0,3"/>
-                                <TextBox Text="{Binding OffsiteLayer, UpdateSourceTrigger=PropertyChanged}"
-                                         Margin="0,0,0,10"/>
-
                                 <TextBlock Text="Landuse area unit" Style="{StaticResource GroupLabel}"/>
                                 <ComboBox ItemsSource="{Binding AreaUnitOptions}"
                                           SelectedItem="{Binding SelectedAreaUnit, Mode=TwoWay}"
@@ -875,7 +1055,7 @@
                                             HorizontalAlignment="Stretch">
                                         <StackPanel>
                                             <TextBlock Text="SPLITBASINS" Style="{StaticResource CommandText}"/>
-                                            <TextBlock Text="Split basins to onsite / offsite layers"
+                                            <TextBlock Text="Split basins using masks (generate geometry)"
                                                        Style="{StaticResource CommandDesc}"/>
                                         </StackPanel>
                                     </Button>
@@ -934,6 +1114,10 @@
                                 <DataTrigger Binding="{Binding ActiveTab}" Value="Landuses">
                                     <Setter Property="ContentTemplate"
                                             Value="{StaticResource LandusesTab}"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding ActiveTab}" Value="Masks">
+                                    <Setter Property="ContentTemplate"
+                                            Value="{StaticResource MasksTab}"/>
                                 </DataTrigger>
                                 <DataTrigger Binding="{Binding ActiveTab}" Value="Settings">
                                     <Setter Property="ContentTemplate"

@@ -3,6 +3,7 @@ using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Runtime;
 using C3DTools.Helpers;
+using C3DTools.Models;
 using C3DTools.Services;
 using NetTopologySuite.Geometries;
 using System.Collections.Generic;
@@ -12,27 +13,32 @@ namespace C3DTools.Commands
     public class SplitBasinsCommand
     {
         private const string AppNameBasin = "C3DTools_Basin";
-        private const string OnsiteLabel = "ONSITE";
-        private const string OffsiteLabel = "OFFSITE";
 
         [CommandMethod("SPLITBASINS")]
         public void SplitBasins()
         {
             Document doc = Application.DocumentManager.MdiActiveDocument;
-            Database db = doc.Database;
-            Editor ed = doc.Editor;
+            Database db  = doc.Database;
+            Editor ed    = doc.Editor;
 
-            // Load settings (drawing-level overrides global defaults)
-            var settings = new SettingsResolver().Resolve(db);
-            string onsiteLayer = settings.OnsiteLayer;
-            string offsiteLayer = settings.OffsiteLayer;
+            // ── 1. Load masks from the drawing NOD ────────────────────────────────
+            var maskService  = new MaskService();
+            List<MaskDefinition> allMasks    = maskService.GetMasks(db);
+            List<MaskDefinition> activeMasks = allMasks.FindAll(m => m.GenerateGeometry);
 
-            // ── 1. Collect all C3DTools_Basin-tagged closed polylines ───────────────
+            if (activeMasks.Count == 0)
+            {
+                ed.WriteMessage("\nNo masks with 'Generate Geometry' enabled. " +
+                                "Add masks in the Basin palette → Masks tab and enable Generate Geometry.");
+                return;
+            }
+
+            // ── 2. Collect all tagged, closed basin polylines ─────────────────────
             var taggedBasins = new List<(ObjectId id, string basinId, string development)>();
 
             using (Transaction tr = db.TransactionManager.StartTransaction())
             {
-                BlockTable bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+                BlockTable bt       = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
                 BlockTableRecord ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
 
                 foreach (ObjectId oid in ms)
@@ -51,7 +57,7 @@ namespace C3DTools.Commands
 
                     if (values.Length > 1 && values[1].TypeCode == (int)DxfCode.ExtendedDataAsciiString)
                     {
-                        string basinId = values[1].Value?.ToString() ?? string.Empty;
+                        string basinId     = values[1].Value?.ToString() ?? string.Empty;
                         string development = (values.Length > 3 && values[3].TypeCode == (int)DxfCode.ExtendedDataAsciiString)
                             ? values[3].Value?.ToString() ?? string.Empty
                             : string.Empty;
@@ -68,37 +74,16 @@ namespace C3DTools.Commands
                 return;
             }
 
-            ed.WriteMessage($"\nFound {taggedBasins.Count} tagged basin(s).");
-
-            // ── 2. Prompt for site boundary polyline ──────────────────────────────
-            PromptEntityOptions peo = new PromptEntityOptions("\nSelect site boundary polyline: ");
-            peo.SetRejectMessage("\nMust be a closed polyline.");
-            peo.AddAllowedClass(typeof(Polyline), true);
-            PromptEntityResult per = ed.GetEntity(peo);
-
-            if (per.Status != PromptStatus.OK) return;
-
-            using (Transaction tr = db.TransactionManager.StartTransaction())
-            {
-                Polyline siteBoundary = (Polyline)tr.GetObject(per.ObjectId, OpenMode.ForRead);
-                if (!siteBoundary.Closed)
-                {
-                    ed.WriteMessage("\nSelected polyline is not closed. Command cancelled.");
-                    tr.Commit();
-                    return;
-                }
-                tr.Commit();
-            }
+            ed.WriteMessage($"\nFound {taggedBasins.Count} tagged basin(s), {activeMasks.Count} active mask(s).");
 
             // ── 3. All DB modifications in one transaction ────────────────────────
             using (Transaction tr = db.TransactionManager.StartTransaction())
             {
-                BlockTable bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+                BlockTable bt               = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
                 BlockTableRecord modelSpace = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
 
-                // ── 3a. Register RegApp name ──────────────────────────────────
+                // ── 3a. Register RegApp name ──────────────────────────────────────
                 RegAppTable rat = (RegAppTable)tr.GetObject(db.RegAppTableId, OpenMode.ForRead);
-
                 if (!rat.Has(AppNameBasin))
                 {
                     rat.UpgradeOpen();
@@ -107,86 +92,99 @@ namespace C3DTools.Commands
                     tr.AddNewlyCreatedDBObject(ratr, true);
                 }
 
-                // ── 3b. Ensure layers exist ────────────────────────────────────
-                EnsureLayer(onsiteLayer, 3, tr, db);   // 3 = green
-                EnsureLayer(offsiteLayer, 1, tr, db);  // 1 = red
+                int totalCreated = 0;
+                int totalErased  = 0;
 
-                // ── 3c. Erase existing split basin polylines (Boundary = ONSITE/OFFSITE) ──────────
-                var toErase = new List<ObjectId>();
-                foreach (ObjectId oid in modelSpace)
+                foreach (MaskDefinition mask in activeMasks)
                 {
-                    if (!oid.ObjectClass.IsDerivedFrom(RXObject.GetClass(typeof(Polyline))))
-                        continue;
-                    Polyline pline = (Polyline)tr.GetObject(oid, OpenMode.ForRead);
-                    ResultBuffer? rb = pline.GetXDataForApplication(AppNameBasin);
-                    if (rb != null)
+                    // ── 3b. Resolve mask polyline handle → ObjectId ───────────────
+                    ObjectId maskOid = maskService.ResolvePolyline(db, mask.PolylineHandle);
+                    if (maskOid.IsNull || maskOid.IsErased)
                     {
-                        TypedValue[] values = rb.AsArray();
-                        // Check if Boundary (index 2) is ONSITE or OFFSITE
-                        if (values.Length > 2 && values[2].TypeCode == (int)DxfCode.ExtendedDataAsciiString)
+                        ed.WriteMessage($"\nMask '{mask.Name}': polyline not found or was erased (handle {mask.PolylineHandle}). Skipping.");
+                        continue;
+                    }
+
+                    Polyline maskPline = (Polyline)tr.GetObject(maskOid, OpenMode.ForRead);
+                    if (!maskPline.Closed)
+                    {
+                        ed.WriteMessage($"\nMask '{mask.Name}': polyline is not closed. Skipping.");
+                        continue;
+                    }
+
+                    Geometry? maskGeom = GeometryConverter.PolylineToNts(maskPline);
+                    if (maskGeom == null)
+                    {
+                        ed.WriteMessage($"\nMask '{mask.Name}': could not convert polyline to geometry. Skipping.");
+                        continue;
+                    }
+
+                    // ── 3c. Ensure layers exist for this mask ─────────────────────
+                    EnsureLayer(mask.InsideLayerName,  3, tr, db);   // green
+                    EnsureLayer(mask.OutsideLayerName, 1, tr, db);   // red
+
+                    // ── 3d. Erase existing split polylines for this mask ──────────
+                    var toErase = new List<ObjectId>();
+                    foreach (ObjectId oid in modelSpace)
+                    {
+                        if (!oid.ObjectClass.IsDerivedFrom(RXObject.GetClass(typeof(Polyline))))
+                            continue;
+                        Polyline pline = (Polyline)tr.GetObject(oid, OpenMode.ForRead);
+                        if (pline.Layer == mask.InsideLayerName || pline.Layer == mask.OutsideLayerName)
                         {
-                            string? boundary = values[2].Value?.ToString();
-                            if (boundary == OnsiteLabel || boundary == OffsiteLabel)
+                            ResultBuffer? rb = pline.GetXDataForApplication(AppNameBasin);
+                            if (rb != null)
                             {
+                                rb.Dispose();
                                 toErase.Add(oid);
                             }
                         }
-                        rb.Dispose();
                     }
-                }
 
-                foreach (ObjectId oid in toErase)
-                {
-                    DBObject obj = tr.GetObject(oid, OpenMode.ForWrite);
-                    obj.Erase();
-                }
+                    foreach (ObjectId oid in toErase)
+                        ((DBObject)tr.GetObject(oid, OpenMode.ForWrite)).Erase();
 
-                if (toErase.Count > 0)
-                    ed.WriteMessage($"\nErased {toErase.Count} existing split basin polyline(s).");
+                    totalErased += toErase.Count;
 
-                // ── 3d. Get site boundary NTS geometry ────────────────────────
-                Polyline sitePline = (Polyline)tr.GetObject(per.ObjectId, OpenMode.ForRead);
-                Geometry? siteGeom = GeometryConverter.PolylineToNts(sitePline);
+                    // ── 3e. Process each tagged basin against this mask ───────────
+                    int insideCount  = 0;
+                    int outsideCount = 0;
 
-                if (siteGeom == null)
-                {
-                    ed.WriteMessage("\nCould not convert site boundary to geometry. Command cancelled.");
-                    return;
-                }
-
-                // ── 3e. Process each tagged basin ──────────────────────────────
-                int onsiteCount = 0;
-                int offsiteCount = 0;
-                int processedCount = 0;
-
-                foreach ((ObjectId basinOid, string basinId, string development) in taggedBasins)
-                {
-                    Polyline basinPline = (Polyline)tr.GetObject(basinOid, OpenMode.ForRead);
-                    Geometry? basinGeom = GeometryConverter.PolylineToNts(basinPline);
-
-                    if (basinGeom == null)
+                    foreach ((ObjectId basinOid, string basinId, string development) in taggedBasins)
                     {
-                        ed.WriteMessage($"\nSkipping basin '{basinId}': could not convert to geometry.");
-                        continue;
+                        Polyline basinPline = (Polyline)tr.GetObject(basinOid, OpenMode.ForRead);
+                        Geometry? basinGeom = GeometryConverter.PolylineToNts(basinPline);
+
+                        if (basinGeom == null)
+                        {
+                            ed.WriteMessage($"\nSkipping basin '{basinId}': could not convert to geometry.");
+                            continue;
+                        }
+
+                        // Inside = intersection with mask
+                        Geometry inside = BooleanOperationHelper.Intersect(basinGeom, maskGeom);
+                        if (!inside.IsEmpty)
+                            insideCount += CreateSplitPolylines(inside, basinId, mask.InsideLabel,
+                                mask.InsideLayerName, development, modelSpace, tr, db);
+
+                        // Outside = difference from mask
+                        Geometry outside = BooleanOperationHelper.Difference(basinGeom, maskGeom);
+                        if (!outside.IsEmpty)
+                            outsideCount += CreateSplitPolylines(outside, basinId, mask.OutsideLabel,
+                                mask.OutsideLayerName, development, modelSpace, tr, db);
                     }
 
-                    processedCount++;
-
-                    // Intersection → onsite
-                    Geometry onsiteGeom = BooleanOperationHelper.Intersect(basinGeom, siteGeom);
-                    if (!onsiteGeom.IsEmpty)
-                        onsiteCount += CreateSplitPolylines(onsiteGeom, basinId, OnsiteLabel, onsiteLayer, development, modelSpace, tr, db);
-
-                    // Difference → offsite
-                    Geometry offsiteGeom = BooleanOperationHelper.Difference(basinGeom, siteGeom);
-                    if (!offsiteGeom.IsEmpty)
-                        offsiteCount += CreateSplitPolylines(offsiteGeom, basinId, OffsiteLabel, offsiteLayer, development, modelSpace, tr, db);
+                    totalCreated += insideCount + outsideCount;
+                    ed.WriteMessage($"\nMask '{mask.Name}': {insideCount} inside ({mask.InsideLayerName}), " +
+                                    $"{outsideCount} outside ({mask.OutsideLayerName}).");
                 }
 
                 tr.Commit();
 
-                ed.WriteMessage($"\nSPLITBASINS complete: {processedCount} basin(s) processed, " +
-                                $"{onsiteCount} onsite piece(s) created, {offsiteCount} offsite piece(s) created.");
+                if (totalErased > 0)
+                    ed.WriteMessage($"\nErased {totalErased} existing split polyline(s).");
+
+                ed.WriteMessage($"\nSPLITBASINS complete: {totalCreated} total polyline(s) created across {activeMasks.Count} mask(s).");
             }
         }
 

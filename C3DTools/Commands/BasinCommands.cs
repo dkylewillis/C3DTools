@@ -53,7 +53,6 @@ namespace C3DTools.Commands
                 ResultBuffer rb = new ResultBuffer(
                     new TypedValue((int)DxfCode.ExtendedDataRegAppName, AppNameBasin),
                     new TypedValue((int)DxfCode.ExtendedDataAsciiString, idValue),
-                    new TypedValue((int)DxfCode.ExtendedDataAsciiString, ""),  // Boundary (empty)
                     new TypedValue((int)DxfCode.ExtendedDataAsciiString, "")   // Development (empty)
                 );
 
@@ -108,17 +107,10 @@ namespace C3DTools.Commands
                         return;
                     }
 
-                    // Boundary (index 2)
+                    // Development (index 2)
                     if (values.Length > 2 && values[2].TypeCode == (int)DxfCode.ExtendedDataAsciiString)
                     {
-                        string? boundary = values[2].Value?.ToString();
-                        ed.WriteMessage($"\nBoundary: {boundary}");
-                    }
-
-                    // Development (index 3)
-                    if (values.Length > 3 && values[3].TypeCode == (int)DxfCode.ExtendedDataAsciiString)
-                    {
-                        string? dev = values[3].Value?.ToString();
+                        string? dev = values[2].Value?.ToString();
                         if (!string.IsNullOrEmpty(dev))
                             ed.WriteMessage($"\nDevelopment: {dev}");
                     }

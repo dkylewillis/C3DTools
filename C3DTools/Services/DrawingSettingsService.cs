@@ -34,14 +34,12 @@ namespace C3DTools.Services
                 TypedValue[] values = xrec.Data.AsArray();
                 tr.Commit();
 
-                if (values.Length < 3)
+                if (values.Length < 1)
                     return null;
 
                 string layersRaw = values[0].Value?.ToString() ?? string.Empty;
-                string onsiteLayer = values[1].Value?.ToString() ?? "CALC-BASN-ONSITE";
-                string offsiteLayer = values[2].Value?.ToString() ?? "CALC-BASN-OFFSITE";
                 AreaUnit areaUnit = AreaUnit.SquareFeet;
-                if (values.Length > 3 && values[3].Value?.ToString() == nameof(AreaUnit.Acres))
+                if (values.Length > 1 && values[1].Value?.ToString() == nameof(AreaUnit.Acres))
                     areaUnit = AreaUnit.Acres;
 
                 var layers = new List<string>();
@@ -54,8 +52,6 @@ namespace C3DTools.Services
                 return new BasinSettings
                 {
                     LanduseHatchLayers = layers,
-                    OnsiteLayer = onsiteLayer,
-                    OffsiteLayer = offsiteLayer,
                     AreaUnit = areaUnit
                 };
             }
@@ -92,8 +88,6 @@ namespace C3DTools.Services
 
                 xrec.Data = new ResultBuffer(
                     new TypedValue((int)DxfCode.Text, layersRaw),
-                    new TypedValue((int)DxfCode.Text, settings.OnsiteLayer),
-                    new TypedValue((int)DxfCode.Text, settings.OffsiteLayer),
                     new TypedValue((int)DxfCode.Text, settings.AreaUnit.ToString())
                 );
 
