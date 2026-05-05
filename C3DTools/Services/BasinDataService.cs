@@ -207,6 +207,7 @@ namespace C3DTools.Services
             Editor ed = doc.Editor;
             ObjectId[] ids = new ObjectId[] { polylineId };
             ed.SetImpliedSelection(ids);
+            Application.UpdateScreen();
         }
     }
 }
