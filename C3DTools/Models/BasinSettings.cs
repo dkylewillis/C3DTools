@@ -25,13 +25,19 @@ namespace C3DTools.Models
         /// </summary>
         public AreaUnit AreaUnit { get; set; } = AreaUnit.SquareFeet;
 
+        public string StormDistribution { get; set; } = "ATLAS14_ALTERNATING_BLOCK";
+
+        public int HydrographTimeStepMinutes { get; set; } = 2;
+
         /// <summary>
         /// Returns a new instance with hardcoded default values.
         /// </summary>
         public static BasinSettings CreateDefaults() => new BasinSettings
         {
             LanduseHatchLayers = new List<string>(),
-            AreaUnit = AreaUnit.SquareFeet
+            AreaUnit = AreaUnit.SquareFeet,
+            StormDistribution = "ATLAS14_ALTERNATING_BLOCK",
+            HydrographTimeStepMinutes = 2
         };
     }
 }

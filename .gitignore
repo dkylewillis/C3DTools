@@ -54,6 +54,10 @@ ClientBin/
 *.pfx
 *.publishsettings
 node_modules/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
 
 # Backup & report files
 *.bak

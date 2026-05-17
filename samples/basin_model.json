@@ -1,0 +1,76 @@
+{
+  "project": {
+    "name": "Sample Hydrology Model",
+    "drawing_path": "",
+    "exported_at_utc": "2026-05-12T00:00:00Z",
+    "source": "C3DTools"
+  },
+  "storms": [],
+  "basins": [
+    {
+      "id": "B-1",
+      "name": "Basin 1",
+      "handle": "1A2B",
+      "condition": "Proposed",
+      "area_acres": 4.21,
+      "curve_number": null,
+      "tc_minutes": 18.4,
+      "outlet_node": "",
+      "downstream_id": "B-2",
+      "land_uses": [
+        { "id": "OPEN", "layer": "C-OPEN-CN61", "area_acres": 3.1, "curve_number": 61 },
+        { "id": "IMP", "layer": "C-IMPERVIOUS", "area_acres": 1.11, "curve_number": 98 }
+      ],
+      "tc_segments": []
+    },
+    {
+      "id": "B-2",
+      "name": "Basin 2",
+      "handle": "1A2C",
+      "condition": "Proposed",
+      "area_acres": 2.35,
+      "curve_number": null,
+      "tc_minutes": 14.2,
+      "outlet_node": "",
+      "downstream_id": "OUTLET",
+      "land_uses": [
+        { "id": "OPEN", "layer": "C-OPEN-CN74", "area_acres": 1.85, "curve_number": 74 },
+        { "id": "IMP", "layer": "C-IMPERVIOUS", "area_acres": 0.5, "curve_number": 98 }
+      ],
+      "tc_segments": []
+    }
+  ],
+  "hydrographs": [
+    {
+      "id": "H1",
+      "type": "SCS",
+      "description": "Basin 1 SCS hydrograph",
+      "basin_id": "B-1",
+      "inflow_ids": [],
+      "downstream_id": "H3",
+      "parameters": {}
+    },
+    {
+      "id": "H2",
+      "type": "SCS",
+      "description": "Basin 2 SCS hydrograph",
+      "basin_id": "B-2",
+      "inflow_ids": [],
+      "downstream_id": "H3",
+      "parameters": {}
+    },
+    {
+      "id": "H3",
+      "type": "Combine",
+      "description": "Study point at Basin 2 outlet",
+      "basin_id": "B-2",
+      "inflow_ids": ["H1", "H2"],
+      "downstream_id": "OUTLET",
+      "parameters": {}
+    }
+  ],
+  "nodes": [],
+  "links": [
+    { "id": "B-1->B-2", "type": "basin_route", "from_basin": "B-1", "to_basin": "B-2" }
+  ]
+}

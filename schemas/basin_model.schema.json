@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://c3dtools.local/schemas/basin_model.schema.json",
+  "type": "object",
+  "required": ["project", "storms", "basins", "nodes", "links"],
+  "properties": {
+    "project": { "type": "object" },
+    "storms": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "source": { "type": "string" },
+          "source_file": { "type": "string" },
+          "location": { "type": "string" },
+          "ari_years": { "type": ["integer", "null"] },
+          "duration": { "type": "string" },
+          "duration_minutes": { "type": ["number", "null"] },
+          "rainfall_depth_inches": { "type": ["number", "null"] },
+          "duration_depths_inches": {
+            "type": "object",
+            "additionalProperties": { "type": "number" }
+          },
+          "distribution": { "type": "string" },
+          "time_step_minutes": { "type": ["integer", "null"] }
+        }
+      }
+    },
+    "basins": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "area_acres", "land_uses", "tc_segments"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "name": { "type": "string" },
+          "handle": { "type": "string" },
+          "condition": { "type": "string" },
+          "area_acres": { "type": "number", "exclusiveMinimum": 0 },
+          "curve_number": { "type": ["number", "null"], "minimum": 30, "maximum": 100 },
+          "tc_minutes": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+          "outlet_node": { "type": "string" },
+          "downstream_id": { "type": "string" },
+          "land_uses": { "type": "array" },
+          "tc_segments": { "type": "array" }
+        }
+      }
+    },
+    "hydrographs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "type"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "type": { "enum": ["SCS", "Rational", "Combine", "Reach", "Reservoir"] },
+          "description": { "type": "string" },
+          "basin_id": { "type": "string" },
+          "inflow_ids": { "type": "array", "items": { "type": "string" } },
+          "downstream_id": { "type": "string" },
+          "parameters": { "type": "object" }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "type": { "enum": ["SCS", "Rational"] } }, "required": ["type"] },
+            "then": { "properties": { "inflow_ids": { "maxItems": 0 } } }
+          },
+          {
+            "if": { "properties": { "type": { "const": "Combine" } }, "required": ["type"] },
+            "then": { "properties": { "inflow_ids": { "minItems": 2 } }, "required": ["inflow_ids"] }
+          },
+          {
+            "if": { "properties": { "type": { "enum": ["Reach", "Reservoir"] } }, "required": ["type"] },
+            "then": { "properties": { "inflow_ids": { "minItems": 1, "maxItems": 1 } }, "required": ["inflow_ids"] }
+          }
+        ]
+      }
+    },
+    "nodes": { "type": "array" },
+    "links": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "type": { "type": "string" },
+          "from_basin": { "type": "string" },
+          "to_basin": { "type": "string" },
+          "from_node": { "type": "string" },
+          "to_node": { "type": "string" }
+        }
+      }
+    }
+  }
+}

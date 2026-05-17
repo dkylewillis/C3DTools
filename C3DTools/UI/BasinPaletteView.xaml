@@ -505,6 +505,12 @@
                                  Command="{Binding SwitchTabCommand}" CommandParameter="Basins"/>
                     <RadioButton Style="{StaticResource TabButton}" Content="Landuses"
                                  Command="{Binding SwitchTabCommand}" CommandParameter="Landuses"/>
+                    <RadioButton Style="{StaticResource TabButton}" Content="Hydrographs"
+                                 Command="{Binding SwitchTabCommand}" CommandParameter="Hydrographs"/>
+                    <RadioButton Style="{StaticResource TabButton}" Content="Ponds"
+                                 Command="{Binding SwitchTabCommand}" CommandParameter="Ponds"/>
+                    <RadioButton Style="{StaticResource TabButton}" Content="Results"
+                                 Command="{Binding SwitchTabCommand}" CommandParameter="Results"/>
                     <RadioButton Style="{StaticResource TabButton}" Content="Masks"
                                  Command="{Binding SwitchTabCommand}" CommandParameter="Masks"/>
                     <RadioButton Style="{StaticResource TabButton}" Content="Settings"
@@ -538,6 +544,24 @@
                                         <ComboBox ItemsSource="{Binding DevelopmentOptions}"
                                                   SelectedItem="{Binding SelectedDevelopment, Mode=TwoWay}"
                                                   Margin="0,0,0,0"/>
+
+                                        <TextBlock Text="HYDROLOGY INPUTS" Style="{StaticResource SectionLabel}"
+                                                   Margin="0,12,0,7"/>
+                                        <Grid Margin="0,0,0,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="8"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="Curve number" Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
+                                                <TextBox Text="{Binding SelectedCurveNumber, UpdateSourceTrigger=PropertyChanged}"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock Text="Tc (min)" Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
+                                                <TextBox Text="{Binding SelectedTcMinutes, UpdateSourceTrigger=PropertyChanged}"/>
+                                            </StackPanel>
+                                        </Grid>
                                         <Grid Margin="0,9,0,0">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*"/>
@@ -820,6 +844,720 @@
                             </StackPanel>
                         </DataTemplate>
 
+                        <!-- ─── HYDROGRAPHS TAB ─── -->
+                        <DataTemplate x:Key="HydrographsTab">
+                            <StackPanel Margin="10">
+                                <DockPanel Margin="0,0,0,7">
+                                    <Button DockPanel.Dock="Right"
+                                            Content="↻"
+                                            Style="{StaticResource IconButton}"
+                                            Command="{Binding RefreshCommand}"
+                                            ToolTip="Refresh hydrographs"/>
+                                    <TextBlock Text="HYDROGRAPHS" Style="{StaticResource SectionLabel}"
+                                               VerticalAlignment="Center"/>
+                                </DockPanel>
+
+                                <Grid Margin="0,0,0,3">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="0.5*"/>
+                                        <ColumnDefinition Width="0.8*"/>
+                                        <ColumnDefinition Width="0.7*"/>
+                                        <ColumnDefinition Width="1.2*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="HYD" FontSize="10" Foreground="#707070" Padding="2,0" FontWeight="SemiBold"/>
+                                    <TextBlock Grid.Column="1" Text="TYPE" FontSize="10" Foreground="#707070" Padding="2,0" FontWeight="SemiBold"/>
+                                    <TextBlock Grid.Column="2" Text="BASIN" FontSize="10" Foreground="#707070" Padding="2,0" FontWeight="SemiBold"/>
+                                    <TextBlock Grid.Column="3" Text="INFLOWS" FontSize="10" Foreground="#707070" Padding="2,0" FontWeight="SemiBold"/>
+                                </Grid>
+
+                                <ListBox ItemsSource="{Binding HydrographRows}"
+                                         SelectedItem="{Binding SelectedHydrographRow}"
+                                         MinHeight="120" MaxHeight="250">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="6,5">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="0.5*"/>
+                                                    <ColumnDefinition Width="0.8*"/>
+                                                    <ColumnDefinition Width="0.7*"/>
+                                                    <ColumnDefinition Width="1.2*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="{Binding Id}"
+                                                           Style="{StaticResource IdText}" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding Type}"
+                                                           Style="{StaticResource MutedText}" Padding="4,0" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="2" Text="{Binding BasinId}"
+                                                           Style="{StaticResource MutedText}" Padding="4,0" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="3" Text="{Binding InflowIdsText}"
+                                                           Style="{StaticResource MutedText}" Padding="4,0"
+                                                           TextWrapping="Wrap" VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+
+                                <Grid Margin="0,8,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="6"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Button Grid.Column="0" Content="Add row"
+                                            Command="{Binding AddHydrographRowCommand}"
+                                            Style="{StaticResource SecondaryButton}"
+                                            HorizontalAlignment="Stretch"/>
+                                    <Button Grid.Column="2" Content="Remove"
+                                            Command="{Binding RemoveHydrographRowCommand}"
+                                            Style="{StaticResource DangerButton}"
+                                            HorizontalAlignment="Stretch"/>
+                                </Grid>
+
+                                <Border BorderBrush="{StaticResource Separator}"
+                                        BorderThickness="0,1,0,0"
+                                        Margin="0,10,0,0" Padding="0,10,0,0"
+                                        Visibility="{Binding SelectedHydrographRow, Converter={StaticResource NullToVisibilityConverter}}">
+                                    <StackPanel>
+                                        <TextBlock Text="EDIT SELECTED" Style="{StaticResource SectionLabel}" Margin="0,0,0,7"/>
+
+                                        <Grid Margin="0,0,0,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="0.8*"/>
+                                                <ColumnDefinition Width="8"/>
+                                                <ColumnDefinition Width="1.2*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="Hyd No." Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
+                                                <TextBox Text="{Binding SelectedHydrographRow.Id, UpdateSourceTrigger=PropertyChanged}"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock Text="Type" Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
+                                                <ComboBox ItemsSource="{Binding HydrographTypeOptions}"
+                                                          SelectedItem="{Binding SelectedHydrographRow.Type, Mode=TwoWay}"/>
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <TextBlock Text="Basin / origin" Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
+                                        <ComboBox ItemsSource="{Binding AvailableHydrographBasins}"
+                                                  SelectedValuePath="BasinId"
+                                                  SelectedValue="{Binding SelectedHydrographRow.BasinId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                  Margin="0,0,0,6">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding DisplayText}"/>
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+
+                                        <TextBlock Text="Inflow Hyd(s)" Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
+                                        <ToggleButton x:Name="InflowPickerButton"
+                                                      Background="{StaticResource BgInput}"
+                                                      Foreground="{StaticResource TextPrimary}"
+                                                      BorderBrush="{StaticResource BorderInput}"
+                                                      BorderThickness="1"
+                                                      Padding="6,4"
+                                                      FontSize="11"
+                                                      HorizontalContentAlignment="Stretch"
+                                                      Margin="0,0,0,0">
+                                            <DockPanel LastChildFill="True">
+                                                <TextBlock DockPanel.Dock="Right"
+                                                           Text="▾"
+                                                           Foreground="{StaticResource TextMuted}"
+                                                           Margin="8,0,0,0"/>
+                                                <TextBlock Text="{Binding SelectedHydrographRow.InflowIdsDisplay}"
+                                                           Foreground="{StaticResource TextPrimary}"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                            </DockPanel>
+                                        </ToggleButton>
+                                        <Popup PlacementTarget="{Binding ElementName=InflowPickerButton}"
+                                               IsOpen="{Binding IsChecked, ElementName=InflowPickerButton, Mode=TwoWay}"
+                                               StaysOpen="False"
+                                               AllowsTransparency="True">
+                                            <Border Width="{Binding ActualWidth, ElementName=InflowPickerButton}"
+                                                    MaxHeight="170"
+                                                    Background="{StaticResource BgInput}"
+                                                    BorderBrush="{StaticResource BorderInput}"
+                                                    BorderThickness="1">
+                                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                                    <ItemsControl ItemsSource="{Binding AvailableInflowRows}">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                                          Content="{Binding DisplayText}"
+                                                                          Foreground="{StaticResource TextMuted}"
+                                                                          FontSize="11"
+                                                                          Margin="7,5"/>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                </ScrollViewer>
+                                            </Border>
+                                        </Popup>
+
+                                        <TextBlock Text="Description" Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
+                                        <TextBox Text="{Binding SelectedHydrographRow.Description, UpdateSourceTrigger=PropertyChanged}"
+                                                 Margin="0,0,0,8"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <Grid Margin="0,8,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="6"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Button Grid.Column="0" Content="Regenerate"
+                                            Command="{Binding RegenerateHydrographRowsCommand}"
+                                            Style="{StaticResource SecondaryButton}"
+                                            HorizontalAlignment="Stretch"/>
+                                    <Button Grid.Column="2" Content="Save rows"
+                                            Command="{Binding SaveHydrographRowsCommand}"
+                                            Style="{StaticResource PrimaryButton}"
+                                            HorizontalAlignment="Stretch"/>
+                                </Grid>
+                            </StackPanel>
+                        </DataTemplate>
+
+                        <!-- ─── PONDS TAB ─── -->
+                        <DataTemplate x:Key="PondsTab">
+                            <StackPanel Margin="10">
+                                <DockPanel Margin="0,0,0,7">
+                                    <Button DockPanel.Dock="Right"
+                                            Content="↻"
+                                            Style="{StaticResource IconButton}"
+                                            Command="{Binding RefreshCommand}"
+                                            ToolTip="Refresh ponds"/>
+                                    <TextBlock Text="PONDS" Style="{StaticResource SectionLabel}"
+                                               VerticalAlignment="Center"/>
+                                </DockPanel>
+
+                                <Grid Margin="0,0,0,3">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="0.5*"/>
+                                        <ColumnDefinition Width="0.9*"/>
+                                        <ColumnDefinition Width="1.1*"/>
+                                        <ColumnDefinition Width="1.2*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="HYD" FontSize="10" Foreground="#707070" Padding="2,0" FontWeight="SemiBold"/>
+                                    <TextBlock Grid.Column="1" Text="POND" FontSize="10" Foreground="#707070" Padding="2,0" FontWeight="SemiBold"/>
+                                    <TextBlock Grid.Column="2" Text="INFLOW" FontSize="10" Foreground="#707070" Padding="2,0" FontWeight="SemiBold"/>
+                                    <TextBlock Grid.Column="3" Text="DESCRIPTION" FontSize="10" Foreground="#707070" Padding="2,0" FontWeight="SemiBold"/>
+                                </Grid>
+
+                                <ListBox ItemsSource="{Binding PondRows}"
+                                         SelectedItem="{Binding SelectedPondRow}"
+                                         MinHeight="100" MaxHeight="210">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="6,5">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="0.5*"/>
+                                                    <ColumnDefinition Width="0.9*"/>
+                                                    <ColumnDefinition Width="1.1*"/>
+                                                    <ColumnDefinition Width="1.2*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="{Binding Id}"
+                                                           Style="{StaticResource IdText}" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding PondName}"
+                                                           Style="{StaticResource MutedText}" Padding="4,0" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="2" Text="{Binding InflowIdsText}"
+                                                           Style="{StaticResource MutedText}" Padding="4,0" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="3" Text="{Binding Description}"
+                                                           Style="{StaticResource MutedText}" Padding="4,0" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+
+                                <Grid Margin="0,8,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="6"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Button Grid.Column="0" Content="Add pond"
+                                            Command="{Binding AddPondRowCommand}"
+                                            Style="{StaticResource SecondaryButton}"
+                                            HorizontalAlignment="Stretch"/>
+                                    <Button Grid.Column="2" Content="Remove"
+                                            Command="{Binding RemovePondRowCommand}"
+                                            Style="{StaticResource DangerButton}"
+                                            HorizontalAlignment="Stretch"/>
+                                </Grid>
+
+                                <Border BorderBrush="{StaticResource Separator}"
+                                        BorderThickness="0,1,0,0"
+                                        Margin="0,10,0,0" Padding="0,10,0,0"
+                                        Visibility="{Binding SelectedPondRow, Converter={StaticResource NullToVisibilityConverter}}">
+                                    <StackPanel>
+                                        <TextBlock Text="EDIT SELECTED" Style="{StaticResource SectionLabel}" Margin="0,0,0,7"/>
+
+                                        <Grid Margin="0,0,0,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="0.8*"/>
+                                                <ColumnDefinition Width="8"/>
+                                                <ColumnDefinition Width="1.2*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="Hyd No." Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
+                                                <TextBox Text="{Binding SelectedPondRow.Id, UpdateSourceTrigger=PropertyChanged}"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock Text="Pond ID" Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
+                                                <TextBox Text="{Binding SelectedPondRow.PondName, UpdateSourceTrigger=PropertyChanged}"/>
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <TextBlock Text="Inflow Hyd" Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
+                                        <ToggleButton x:Name="PondInflowPickerButton"
+                                                      Background="{StaticResource BgInput}"
+                                                      Foreground="{StaticResource TextPrimary}"
+                                                      BorderBrush="{StaticResource BorderInput}"
+                                                      BorderThickness="1"
+                                                      Padding="6,4"
+                                                      FontSize="11"
+                                                      HorizontalContentAlignment="Stretch"
+                                                      Margin="0,0,0,6">
+                                            <DockPanel LastChildFill="True">
+                                                <TextBlock DockPanel.Dock="Right"
+                                                           Text="▾"
+                                                           Foreground="{StaticResource TextMuted}"
+                                                           Margin="8,0,0,0"/>
+                                                <TextBlock Text="{Binding SelectedPondRow.InflowIdsDisplay}"
+                                                           Foreground="{StaticResource TextPrimary}"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                            </DockPanel>
+                                        </ToggleButton>
+                                        <Popup PlacementTarget="{Binding ElementName=PondInflowPickerButton}"
+                                               IsOpen="{Binding IsChecked, ElementName=PondInflowPickerButton, Mode=TwoWay}"
+                                               StaysOpen="False"
+                                               AllowsTransparency="True">
+                                            <Border Width="{Binding ActualWidth, ElementName=PondInflowPickerButton}"
+                                                    MaxHeight="170"
+                                                    Background="{StaticResource BgInput}"
+                                                    BorderBrush="{StaticResource BorderInput}"
+                                                    BorderThickness="1">
+                                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                                    <ItemsControl ItemsSource="{Binding AvailableInflowRows}">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                                          Content="{Binding DisplayText}"
+                                                                          Foreground="{StaticResource TextMuted}"
+                                                                          FontSize="11"
+                                                                          Margin="7,5"/>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                </ScrollViewer>
+                                            </Border>
+                                        </Popup>
+
+                                        <TabControl Margin="0,2,0,8"
+                                                    Background="{StaticResource BgSurface}"
+                                                    BorderBrush="{StaticResource BorderMuted}"
+                                                    Foreground="{StaticResource TextPrimary}">
+                                            <TabControl.Resources>
+                                                <Style TargetType="TabItem">
+                                                    <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+                                                    <Setter Property="Background" Value="{StaticResource BgPrimary}"/>
+                                                    <Setter Property="BorderBrush" Value="{StaticResource BorderMuted}"/>
+                                                    <Setter Property="Padding" Value="10,5"/>
+                                                    <Setter Property="Template">
+                                                        <Setter.Value>
+                                                            <ControlTemplate TargetType="TabItem">
+                                                                <Border x:Name="TabBorder"
+                                                                        Background="{TemplateBinding Background}"
+                                                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                                                        BorderThickness="1,1,1,0"
+                                                                        Padding="{TemplateBinding Padding}">
+                                                                    <ContentPresenter ContentSource="Header"
+                                                                                      HorizontalAlignment="Center"
+                                                                                      VerticalAlignment="Center"/>
+                                                                </Border>
+                                                                <ControlTemplate.Triggers>
+                                                                    <Trigger Property="IsSelected" Value="True">
+                                                                        <Setter TargetName="TabBorder" Property="Background" Value="{StaticResource BgSurface}"/>
+                                                                        <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+                                                                    </Trigger>
+                                                                </ControlTemplate.Triggers>
+                                                            </ControlTemplate>
+                                                        </Setter.Value>
+                                                    </Setter>
+                                                </Style>
+                                            </TabControl.Resources>
+                                            <TabItem Header="Storage">
+                                                <StackPanel Margin="8" Background="{StaticResource BgSurface}">
+                                                    <Border BorderBrush="{StaticResource BorderMuted}"
+                                                            BorderThickness="1"
+                                                            Margin="0,0,0,6">
+                                                        <StackPanel>
+                                                            <Grid Background="#3388C6" MinHeight="30">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="0.45*"/>
+                                                                    <ColumnDefinition Width="1.2*"/>
+                                                                    <ColumnDefinition Width="1.2*"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <TextBlock Grid.Column="0" Text="#" Foreground="White" FontWeight="SemiBold" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                                <TextBlock Grid.Column="1" Text="Elevation (ft)" Foreground="White" FontWeight="SemiBold" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                                <TextBlock Grid.Column="2" Text="Volume (cu ft)" Foreground="White" FontWeight="SemiBold" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                            </Grid>
+                                                            <ItemsControl ItemsSource="{Binding SelectedPondRow.StageStorageRows}">
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate>
+                                                                        <Grid MinHeight="24">
+                                                                            <Grid.ColumnDefinitions>
+                                                                                <ColumnDefinition Width="0.45*"/>
+                                                                                <ColumnDefinition Width="1.2*"/>
+                                                                                <ColumnDefinition Width="1.2*"/>
+                                                                            </Grid.ColumnDefinitions>
+                                                                            <Border Grid.Column="0" BorderBrush="{StaticResource BorderMuted}" BorderThickness="0,0,1,1" Background="{StaticResource BgSurface}">
+                                                                                <TextBlock Text="{Binding RowNumber}" FontSize="10" Foreground="{StaticResource TextMuted}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                                            </Border>
+                                                                            <TextBox Grid.Column="1" Text="{Binding Elevation, UpdateSourceTrigger=PropertyChanged}" FontSize="10" Padding="2,1" HorizontalContentAlignment="Center" BorderThickness="0,0,1,1"/>
+                                                                            <TextBox Grid.Column="2" Text="{Binding Volume, UpdateSourceTrigger=PropertyChanged}" FontSize="10" Padding="2,1" HorizontalContentAlignment="Center" BorderThickness="0,0,0,1"/>
+                                                                        </Grid>
+                                                                    </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </StackPanel>
+                                            </TabItem>
+
+                                            <TabItem Header="Outlet">
+                                                <StackPanel Margin="8" Background="{StaticResource BgSurface}">
+                                        <Border BorderBrush="{StaticResource BorderMuted}"
+                                                BorderThickness="1"
+                                                Margin="0,2,0,8">
+                                            <StackPanel>
+                                                <Border Background="{StaticResource BgPrimary}" Padding="7,5">
+                                                    <TextBlock Text="CULVERTS / ORIFICES" Style="{StaticResource SectionLabel}"/>
+                                                </Border>
+                                                <Grid Background="#3388C6" MinHeight="30">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="1.35*"/>
+                                                        <ColumnDefinition Width="0.55*"/>
+                                                        <ColumnDefinition Width="0.55*"/>
+                                                        <ColumnDefinition Width="0.55*"/>
+                                                        <ColumnDefinition Width="1.1*"/>
+                                                        <ColumnDefinition Width="0.8*"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Grid.Column="0" Text="Culv/Orifice" Foreground="White" FontWeight="SemiBold" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="1" Text="A" Foreground="White" FontWeight="SemiBold" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="2" Text="B" Foreground="White" FontWeight="SemiBold" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="3" Text="C" Foreground="White" FontWeight="SemiBold" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="4" Grid.ColumnSpan="2" Text="Pri Riser" Foreground="White" FontWeight="SemiBold" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Grid>
+                                                <ItemsControl ItemsSource="{Binding SelectedPondRow.CulvertOrificeRows}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Grid MinHeight="24">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="1.35*"/>
+                                                                    <ColumnDefinition Width="0.55*"/>
+                                                                    <ColumnDefinition Width="0.55*"/>
+                                                                    <ColumnDefinition Width="0.55*"/>
+                                                                    <ColumnDefinition Width="1.1*"/>
+                                                                    <ColumnDefinition Width="0.8*"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <Border Grid.Column="0" BorderBrush="{StaticResource BorderMuted}" BorderThickness="0,0,1,1" Background="{StaticResource BgSurface}">
+                                                                    <TextBlock Text="{Binding Label}" FontSize="10" Foreground="{StaticResource TextPrimary}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="4,0"/>
+                                                                </Border>
+                                                                <TextBox Grid.Column="1" Text="{Binding A, UpdateSourceTrigger=PropertyChanged}" FontSize="10" Padding="2,1" HorizontalContentAlignment="Center" BorderThickness="0,0,1,1"/>
+                                                                <TextBox Grid.Column="2" Text="{Binding B, UpdateSourceTrigger=PropertyChanged}" FontSize="10" Padding="2,1" HorizontalContentAlignment="Center" BorderThickness="0,0,1,1"/>
+                                                                <TextBox Grid.Column="3" Text="{Binding C, UpdateSourceTrigger=PropertyChanged}" FontSize="10" Padding="2,1" HorizontalContentAlignment="Center" BorderThickness="0,0,1,1"/>
+                                                                <Border Grid.Column="4" BorderBrush="{StaticResource BorderMuted}" BorderThickness="0,0,1,1" Background="{StaticResource BgSurface}">
+                                                                    <TextBlock Text="{Binding RiserLabel}" FontSize="10" Foreground="{StaticResource TextPrimary}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="4,0"/>
+                                                                </Border>
+                                                                <TextBox Grid.Column="5" Text="{Binding Riser, UpdateSourceTrigger=PropertyChanged}" FontSize="10" Padding="2,1" HorizontalContentAlignment="Center" BorderThickness="0,0,0,1"/>
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <Border BorderBrush="{StaticResource BorderMuted}"
+                                                BorderThickness="1"
+                                                Margin="0,0,0,8">
+                                            <StackPanel>
+                                                <Border Background="{StaticResource BgPrimary}" Padding="7,5">
+                                                    <TextBlock Text="WEIRS" Style="{StaticResource SectionLabel}"/>
+                                                </Border>
+                                                <Grid Background="#3388C6" MinHeight="30">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="1.35*"/>
+                                                        <ColumnDefinition Width="0.55*"/>
+                                                        <ColumnDefinition Width="0.55*"/>
+                                                        <ColumnDefinition Width="0.55*"/>
+                                                        <ColumnDefinition Width="1.25*"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Grid.Column="0" Text="Weir" Foreground="White" FontWeight="SemiBold" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="1" Text="A" Foreground="White" FontWeight="SemiBold" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="2" Text="B" Foreground="White" FontWeight="SemiBold" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="3" Text="C" Foreground="White" FontWeight="SemiBold" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="4" Text="D" Foreground="White" FontWeight="SemiBold" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Grid>
+                                                <ItemsControl ItemsSource="{Binding SelectedPondRow.WeirRows}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Grid MinHeight="24">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="1.35*"/>
+                                                                    <ColumnDefinition Width="0.55*"/>
+                                                                    <ColumnDefinition Width="0.55*"/>
+                                                                    <ColumnDefinition Width="0.55*"/>
+                                                                    <ColumnDefinition Width="1.25*"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <Border Grid.Column="0" BorderBrush="{StaticResource BorderMuted}" BorderThickness="0,0,1,1" Background="{StaticResource BgSurface}">
+                                                                    <TextBlock Text="{Binding Label}" FontSize="10" Foreground="{StaticResource TextPrimary}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="4,0"/>
+                                                                </Border>
+                                                                <ContentControl Grid.Column="1" Content="{Binding}">
+                                                                    <ContentControl.Style>
+                                                                        <Style TargetType="ContentControl">
+                                                                            <Setter Property="ContentTemplate">
+                                                                                <Setter.Value>
+                                                                                    <DataTemplate>
+                                                                                        <TextBox Text="{Binding A, UpdateSourceTrigger=PropertyChanged}" FontSize="10" Padding="2,1" HorizontalContentAlignment="Center" BorderThickness="0,0,1,1"/>
+                                                                                    </DataTemplate>
+                                                                                </Setter.Value>
+                                                                            </Setter>
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding IsWeirTypeRow}" Value="True">
+                                                                                    <Setter Property="ContentTemplate">
+                                                                                        <Setter.Value>
+                                                                                            <DataTemplate>
+                                                                                                <ComboBox ItemsSource="{Binding AWeirTypeOptions}" SelectedItem="{Binding A, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" FontSize="10" Padding="2,0" BorderThickness="0,0,1,1"/>
+                                                                                            </DataTemplate>
+                                                                                        </Setter.Value>
+                                                                                    </Setter>
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </ContentControl.Style>
+                                                                </ContentControl>
+                                                                <ContentControl Grid.Column="2" Content="{Binding}">
+                                                                    <ContentControl.Style>
+                                                                        <Style TargetType="ContentControl">
+                                                                            <Setter Property="ContentTemplate">
+                                                                                <Setter.Value>
+                                                                                    <DataTemplate>
+                                                                                        <TextBox Text="{Binding B, UpdateSourceTrigger=PropertyChanged}" FontSize="10" Padding="2,1" HorizontalContentAlignment="Center" BorderThickness="0,0,1,1"/>
+                                                                                    </DataTemplate>
+                                                                                </Setter.Value>
+                                                                            </Setter>
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding IsWeirTypeRow}" Value="True">
+                                                                                    <Setter Property="ContentTemplate">
+                                                                                        <Setter.Value>
+                                                                                            <DataTemplate>
+                                                                                                <ComboBox ItemsSource="{Binding WeirTypeOptions}" SelectedItem="{Binding B, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" FontSize="10" Padding="2,0" BorderThickness="0,0,1,1"/>
+                                                                                            </DataTemplate>
+                                                                                        </Setter.Value>
+                                                                                    </Setter>
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </ContentControl.Style>
+                                                                </ContentControl>
+                                                                <ContentControl Grid.Column="3" Content="{Binding}">
+                                                                    <ContentControl.Style>
+                                                                        <Style TargetType="ContentControl">
+                                                                            <Setter Property="ContentTemplate">
+                                                                                <Setter.Value>
+                                                                                    <DataTemplate>
+                                                                                        <TextBox Text="{Binding C, UpdateSourceTrigger=PropertyChanged}" FontSize="10" Padding="2,1" HorizontalContentAlignment="Center" BorderThickness="0,0,1,1"/>
+                                                                                    </DataTemplate>
+                                                                                </Setter.Value>
+                                                                            </Setter>
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding IsWeirTypeRow}" Value="True">
+                                                                                    <Setter Property="ContentTemplate">
+                                                                                        <Setter.Value>
+                                                                                            <DataTemplate>
+                                                                                                <ComboBox ItemsSource="{Binding WeirTypeOptions}" SelectedItem="{Binding C, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" FontSize="10" Padding="2,0" BorderThickness="0,0,1,1"/>
+                                                                                            </DataTemplate>
+                                                                                        </Setter.Value>
+                                                                                    </Setter>
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </ContentControl.Style>
+                                                                </ContentControl>
+                                                                <ContentControl Grid.Column="4" Content="{Binding}">
+                                                                    <ContentControl.Style>
+                                                                        <Style TargetType="ContentControl">
+                                                                            <Setter Property="ContentTemplate">
+                                                                                <Setter.Value>
+                                                                                    <DataTemplate>
+                                                                                        <TextBox Text="{Binding D, UpdateSourceTrigger=PropertyChanged}" FontSize="10" Padding="2,1" HorizontalContentAlignment="Center" BorderThickness="0,0,0,1"/>
+                                                                                    </DataTemplate>
+                                                                                </Setter.Value>
+                                                                            </Setter>
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding IsWeirTypeRow}" Value="True">
+                                                                                    <Setter Property="ContentTemplate">
+                                                                                        <Setter.Value>
+                                                                                            <DataTemplate>
+                                                                                                <ComboBox ItemsSource="{Binding WeirTypeOptions}" SelectedItem="{Binding D, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" FontSize="10" Padding="2,0" BorderThickness="0,0,0,1"/>
+                                                                                            </DataTemplate>
+                                                                                        </Setter.Value>
+                                                                                    </Setter>
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </ContentControl.Style>
+                                                                </ContentControl>
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <Grid Margin="0,0,0,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="8"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="Tailwater Elevation (ft)" Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
+                                                <TextBox Text="{Binding SelectedPondRow.TailwaterElevation, UpdateSourceTrigger=PropertyChanged}"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock Text="Exfiltration Rate (in/hr)" Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
+                                                <TextBox Text="{Binding SelectedPondRow.ExfiltrationRate, UpdateSourceTrigger=PropertyChanged}"/>
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <Grid Margin="0,0,0,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="8"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="Exfiltration Applies To" Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
+                                                <TextBox Text="{Binding SelectedPondRow.ExfiltrationApplyTo, UpdateSourceTrigger=PropertyChanged}"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock Text="Extract from Outflow Hyd" Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
+                                                <TextBox Text="{Binding SelectedPondRow.ExfiltrationExtractFromOutflowHyd, UpdateSourceTrigger=PropertyChanged}"/>
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <TextBlock Text="Outlet notes" Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
+                                        <TextBox Text="{Binding SelectedPondRow.OutletStructureText, UpdateSourceTrigger=PropertyChanged}"
+                                                 AcceptsReturn="True"
+                                                 TextWrapping="Wrap"
+                                                 MinHeight="42"
+                                                 VerticalScrollBarVisibility="Auto"
+                                                 Margin="0,0,0,6"/>
+
+                                                </StackPanel>
+                                            </TabItem>
+                                        </TabControl>
+
+                                        <TextBlock Text="Description" Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
+                                        <TextBox Text="{Binding SelectedPondRow.Description, UpdateSourceTrigger=PropertyChanged}"
+                                                 Margin="0,0,0,8"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <Button Content="Save ponds"
+                                        Command="{Binding SavePondRowsCommand}"
+                                        Style="{StaticResource PrimaryButton}"
+                                        HorizontalAlignment="Stretch"
+                                        Margin="0,8,0,0"/>
+                            </StackPanel>
+                        </DataTemplate>
+
+                        <!-- ─── RESULTS TAB ─── -->
+                        <DataTemplate x:Key="ResultsTab">
+                            <StackPanel Margin="10">
+                                <DockPanel Margin="0,0,0,7">
+                                    <Button DockPanel.Dock="Right"
+                                            Content="↻"
+                                            Style="{StaticResource IconButton}"
+                                            Command="{Binding RefreshHydrologyResultsCommand}"
+                                            ToolTip="Refresh hydrology results"/>
+                                    <TextBlock Text="HYDROGRAPH RETURN PERIOD RECAP" Style="{StaticResource SectionLabel}"
+                                               VerticalAlignment="Center"/>
+                                </DockPanel>
+
+                                <TextBlock Text="{Binding ResultsStatus}"
+                                           Style="{StaticResource MutedText}"
+                                           FontSize="10"
+                                           TextWrapping="Wrap"
+                                           Margin="0,0,0,8"/>
+
+                                <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                                    <StackPanel MinWidth="760">
+                                        <Grid Margin="0,0,0,3">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="46"/>
+                                                <ColumnDefinition Width="90"/>
+                                                <ColumnDefinition Width="80"/>
+                                                <ColumnDefinition Width="58"/>
+                                                <ColumnDefinition Width="58"/>
+                                                <ColumnDefinition Width="58"/>
+                                                <ColumnDefinition Width="58"/>
+                                                <ColumnDefinition Width="58"/>
+                                                <ColumnDefinition Width="58"/>
+                                                <ColumnDefinition Width="58"/>
+                                                <ColumnDefinition Width="160"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="HYD" FontSize="10" Foreground="#707070" FontWeight="SemiBold"/>
+                                            <TextBlock Grid.Column="1" Text="TYPE" FontSize="10" Foreground="#707070" FontWeight="SemiBold"/>
+                                            <TextBlock Grid.Column="2" Text="INFLOW" FontSize="10" Foreground="#707070" FontWeight="SemiBold"/>
+                                            <TextBlock Grid.Column="3" Text="1-YR" FontSize="10" Foreground="#707070" FontWeight="SemiBold" TextAlignment="Right"/>
+                                            <TextBlock Grid.Column="4" Text="2-YR" FontSize="10" Foreground="#707070" FontWeight="SemiBold" TextAlignment="Right"/>
+                                            <TextBlock Grid.Column="5" Text="5-YR" FontSize="10" Foreground="#707070" FontWeight="SemiBold" TextAlignment="Right"/>
+                                            <TextBlock Grid.Column="6" Text="10-YR" FontSize="10" Foreground="#707070" FontWeight="SemiBold" TextAlignment="Right"/>
+                                            <TextBlock Grid.Column="7" Text="25-YR" FontSize="10" Foreground="#707070" FontWeight="SemiBold" TextAlignment="Right"/>
+                                            <TextBlock Grid.Column="8" Text="50-YR" FontSize="10" Foreground="#707070" FontWeight="SemiBold" TextAlignment="Right"/>
+                                            <TextBlock Grid.Column="9" Text="100-YR" FontSize="10" Foreground="#707070" FontWeight="SemiBold" TextAlignment="Right"/>
+                                            <TextBlock Grid.Column="10" Text="DESCRIPTION" FontSize="10" Foreground="#707070" FontWeight="SemiBold" Padding="8,0,0,0"/>
+                                        </Grid>
+
+                                        <ListBox ItemsSource="{Binding HydrographResultRows}" MinHeight="120" MaxHeight="430">
+                                            <ListBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid Margin="6,4">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="40"/>
+                                                            <ColumnDefinition Width="90"/>
+                                                            <ColumnDefinition Width="80"/>
+                                                            <ColumnDefinition Width="58"/>
+                                                            <ColumnDefinition Width="58"/>
+                                                            <ColumnDefinition Width="58"/>
+                                                            <ColumnDefinition Width="58"/>
+                                                            <ColumnDefinition Width="58"/>
+                                                            <ColumnDefinition Width="58"/>
+                                                            <ColumnDefinition Width="58"/>
+                                                            <ColumnDefinition Width="160"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Grid.Column="0" Text="{Binding HydNo}" Style="{StaticResource IdText}"/>
+                                                        <TextBlock Grid.Column="1" Text="{Binding Type}" Style="{StaticResource MutedText}"/>
+                                                        <TextBlock Grid.Column="2" Text="{Binding InflowHyds}" Style="{StaticResource MutedText}" TextTrimming="CharacterEllipsis"/>
+                                                        <TextBlock Grid.Column="3" Text="{Binding Q1}" Style="{StaticResource MutedText}" TextAlignment="Right"/>
+                                                        <TextBlock Grid.Column="4" Text="{Binding Q2}" Style="{StaticResource MutedText}" TextAlignment="Right"/>
+                                                        <TextBlock Grid.Column="5" Text="{Binding Q5}" Style="{StaticResource MutedText}" TextAlignment="Right"/>
+                                                        <TextBlock Grid.Column="6" Text="{Binding Q10}" Style="{StaticResource MutedText}" TextAlignment="Right"/>
+                                                        <TextBlock Grid.Column="7" Text="{Binding Q25}" Style="{StaticResource MutedText}" TextAlignment="Right"/>
+                                                        <TextBlock Grid.Column="8" Text="{Binding Q50}" Style="{StaticResource MutedText}" TextAlignment="Right"/>
+                                                        <TextBlock Grid.Column="9" Text="{Binding Q100}" Style="{StaticResource MutedText}" TextAlignment="Right"/>
+                                                        <TextBlock Grid.Column="10" Text="{Binding Description}" Style="{StaticResource MutedText}" Padding="8,0,0,0" TextTrimming="CharacterEllipsis"/>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ListBox.ItemTemplate>
+                                        </ListBox>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </StackPanel>
+                        </DataTemplate>
+
                         <!-- ─── MASKS TAB ─── -->
                         <DataTemplate x:Key="MasksTab">
                             <StackPanel DataContext="{Binding MasksViewModel}">
@@ -1014,7 +1752,16 @@
                                 <TextBlock Text="Landuse area unit" Style="{StaticResource GroupLabel}"/>
                                 <ComboBox ItemsSource="{Binding AreaUnitOptions}"
                                           SelectedItem="{Binding SelectedAreaUnit, Mode=TwoWay}"
+                                          Margin="0,0,0,12"/>
+
+                                <TextBlock Text="Storm distribution" Style="{StaticResource GroupLabel}"/>
+                                <ComboBox ItemsSource="{Binding StormDistributionOptions}"
+                                          SelectedItem="{Binding SelectedStormDistribution, Mode=TwoWay}"
                                           Margin="0,0,0,16"/>
+
+                                <TextBlock Text="Hydrograph time step (min)" Style="{StaticResource GroupLabel}"/>
+                                <TextBox Text="{Binding HydrographTimeStepMinutes, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                         Margin="0,0,0,16"/>
 
                                 <Button Content="Save to drawing"
                                         Command="{Binding SaveToDrawingCommand}"
@@ -1056,6 +1803,16 @@
                                         <StackPanel>
                                             <TextBlock Text="SPLITBASINS" Style="{StaticResource CommandText}"/>
                                             <TextBlock Text="Split basins using masks (generate geometry)"
+                                                       Style="{StaticResource CommandDesc}"/>
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button Command="{Binding RunHydroModelCommand}"
+                                            Style="{StaticResource CommandButton}"
+                                            HorizontalAlignment="Stretch">
+                                        <StackPanel>
+                                            <TextBlock Text="RUN_HYDRO_MODEL" Style="{StaticResource CommandText}"/>
+                                            <TextBlock Text="Export basin model and run the hydrology engine"
                                                        Style="{StaticResource CommandDesc}"/>
                                         </StackPanel>
                                     </Button>
@@ -1114,6 +1871,18 @@
                                 <DataTrigger Binding="{Binding ActiveTab}" Value="Landuses">
                                     <Setter Property="ContentTemplate"
                                             Value="{StaticResource LandusesTab}"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding ActiveTab}" Value="Hydrographs">
+                                    <Setter Property="ContentTemplate"
+                                            Value="{StaticResource HydrographsTab}"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding ActiveTab}" Value="Ponds">
+                                    <Setter Property="ContentTemplate"
+                                            Value="{StaticResource PondsTab}"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding ActiveTab}" Value="Results">
+                                    <Setter Property="ContentTemplate"
+                                            Value="{StaticResource ResultsTab}"/>
                                 </DataTrigger>
                                 <DataTrigger Binding="{Binding ActiveTab}" Value="Masks">
                                     <Setter Property="ContentTemplate"

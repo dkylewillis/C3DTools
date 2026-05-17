@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://c3dtools.local/schemas/results.schema.json",
+  "type": "object",
+  "required": ["project", "summary", "basins", "validation"],
+  "properties": {
+    "project": { "type": "object" },
+    "summary": { "type": "object" },
+    "active_storm_id": { "type": "string" },
+    "storms": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "source": { "type": "string" },
+          "source_file": { "type": "string" },
+          "location": { "type": "string" },
+          "ari_years": { "type": ["integer", "null"] },
+          "duration": { "type": "string" },
+          "duration_minutes": { "type": ["number", "null"] },
+          "rainfall_depth_inches": { "type": ["number", "null"] },
+          "distribution": { "type": "string" },
+          "time_step_minutes": { "type": ["integer", "null"] }
+        }
+      }
+    },
+    "peak_flows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "storm_id": { "type": "string" },
+          "storm_name": { "type": "string" },
+          "ari_years": { "type": ["integer", "null"] },
+          "duration_minutes": { "type": ["number", "null"] },
+          "rainfall_depth_inches": { "type": ["number", "null"] },
+          "basin_id": { "type": "string" },
+          "local_peak_cfs": { "type": ["number", "null"] },
+          "routed_peak_cfs": { "type": ["number", "null"] },
+          "local_peak_time_minutes": { "type": ["number", "null"] },
+          "routed_peak_time_minutes": { "type": ["number", "null"] }
+        }
+      }
+    },
+    "hydrographs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/hydrographResult" }
+    },
+    "hydrograph_peak_flows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "storm_id": { "type": "string" },
+          "storm_name": { "type": "string" },
+          "ari_years": { "type": ["integer", "null"] },
+          "duration_minutes": { "type": ["number", "null"] },
+          "rainfall_depth_inches": { "type": ["number", "null"] },
+          "hydrograph_id": { "type": "string" },
+          "hydrograph_type": { "type": "string" },
+          "basin_id": { "type": "string" },
+          "inflow_ids": { "type": "array", "items": { "type": "string" } },
+          "peak_flow_cfs": { "type": ["number", "null"] },
+          "time_to_peak_minutes": { "type": ["number", "null"] },
+          "volume_cuft": { "type": ["number", "null"] },
+          "maximum_elevation_ft": { "type": ["number", "null"] },
+          "maximum_storage_cuft": { "type": ["number", "null"] },
+          "status": { "type": "string" }
+        }
+      }
+    },
+    "basins": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "area_acres", "status"],
+        "properties": {
+          "id": { "type": "string" },
+          "handle": { "type": "string" },
+          "area_acres": { "type": "number" },
+          "curve_number": { "type": ["number", "null"] },
+          "tc_minutes": { "type": ["number", "null"] },
+          "impervious_percent": { "type": ["number", "null"] },
+          "downstream_id": { "type": "string" },
+          "upstream_ids": { "type": "array", "items": { "type": "string" } },
+          "local_hydrograph_id": { "type": "string" },
+          "routed_hydrograph_id": { "type": "string" },
+          "local_peak_cfs": { "type": ["number", "null"] },
+          "routed_peak_cfs": { "type": ["number", "null"] },
+          "local_peak_time_minutes": { "type": ["number", "null"] },
+          "routed_peak_time_minutes": { "type": ["number", "null"] },
+          "local_hydrograph": { "$ref": "#/$defs/hydrograph" },
+          "routed_hydrograph": { "$ref": "#/$defs/hydrograph" },
+          "status": { "type": "string" }
+        }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "required": ["errors", "warnings", "info"],
+      "properties": {
+        "errors": { "type": "array", "items": { "type": "string" } },
+        "warnings": { "type": "array", "items": { "type": "string" } },
+        "info": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  },
+  "$defs": {
+    "hydrograph": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["time_minutes", "flow_cfs"],
+        "properties": {
+          "time_minutes": { "type": "number" },
+          "flow_cfs": { "type": "number" }
+        }
+      }
+    },
+    "hydrographResult": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string" },
+        "description": { "type": "string" },
+        "storm_id": { "type": "string" },
+        "basin_id": { "type": "string" },
+        "inflow_ids": { "type": "array", "items": { "type": "string" } },
+        "downstream_id": { "type": "string" },
+        "peak_flow_cfs": { "type": ["number", "null"] },
+        "time_to_peak_minutes": { "type": ["number", "null"] },
+        "time_interval_minutes": { "type": ["number", "null"] },
+        "tc_minutes": { "type": ["number", "null"] },
+        "volume_cuft": { "type": ["number", "null"] },
+        "maximum_elevation_ft": { "type": ["number", "null"] },
+        "maximum_storage_cuft": { "type": ["number", "null"] },
+        "points": { "$ref": "#/$defs/hydrograph" },
+        "status": { "type": "string" }
+      }
+    }
+  }
+}

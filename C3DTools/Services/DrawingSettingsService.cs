@@ -41,6 +41,12 @@ namespace C3DTools.Services
                 AreaUnit areaUnit = AreaUnit.SquareFeet;
                 if (values.Length > 1 && values[1].Value?.ToString() == nameof(AreaUnit.Acres))
                     areaUnit = AreaUnit.Acres;
+                string stormDistribution = values.Length > 2
+                    ? values[2].Value?.ToString() ?? "ATLAS14_ALTERNATING_BLOCK"
+                    : "ATLAS14_ALTERNATING_BLOCK";
+                int hydrographTimeStepMinutes = 2;
+                if (values.Length > 3 && int.TryParse(values[3].Value?.ToString(), out int storedTimeStep) && storedTimeStep > 0)
+                    hydrographTimeStepMinutes = storedTimeStep;
 
                 var layers = new List<string>();
                 if (!string.IsNullOrEmpty(layersRaw))
@@ -52,7 +58,9 @@ namespace C3DTools.Services
                 return new BasinSettings
                 {
                     LanduseHatchLayers = layers,
-                    AreaUnit = areaUnit
+                    AreaUnit = areaUnit,
+                    StormDistribution = string.IsNullOrWhiteSpace(stormDistribution) ? "ATLAS14_ALTERNATING_BLOCK" : stormDistribution,
+                    HydrographTimeStepMinutes = hydrographTimeStepMinutes
                 };
             }
             catch
@@ -88,7 +96,9 @@ namespace C3DTools.Services
 
                 xrec.Data = new ResultBuffer(
                     new TypedValue((int)DxfCode.Text, layersRaw),
-                    new TypedValue((int)DxfCode.Text, settings.AreaUnit.ToString())
+                    new TypedValue((int)DxfCode.Text, settings.AreaUnit.ToString()),
+                    new TypedValue((int)DxfCode.Text, string.IsNullOrWhiteSpace(settings.StormDistribution) ? "ATLAS14_ALTERNATING_BLOCK" : settings.StormDistribution),
+                    new TypedValue((int)DxfCode.Int16, settings.HydrographTimeStepMinutes > 0 ? settings.HydrographTimeStepMinutes : 2)
                 );
 
                 tr.Commit();

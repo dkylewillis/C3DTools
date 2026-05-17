@@ -12,6 +12,12 @@ namespace C3DTools.Models
         public bool IsTagged => !string.IsNullOrWhiteSpace(BasinId);
         public string? Layer { get; set; }
 
+        public double? CurveNumber { get; set; }
+
+        public double? TcMinutes { get; set; }
+
+        public string DownstreamId { get; set; } = string.Empty;
+
         /// <summary>
         /// Development stage: "Pre", "Post", or empty string
         /// </summary>
