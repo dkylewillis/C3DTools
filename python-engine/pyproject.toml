@@ -3,7 +3,7 @@ name = "c3dtools-hydro-engine"
 version = "0.1.0"
 description = "Civil 3D independent hydrology engine for C3DTools basin_model.json files."
 requires-python = ">=3.10"
-dependencies = ["openpyxl>=3.1", "pyflo>=0.3.3"]
+dependencies = ["openpyxl>=3.1"]
 
 [project.optional-dependencies]
 test = ["pytest>=8"]

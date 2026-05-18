@@ -4,7 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
-from hydro_app.engines.pyflo_engine import PyfloEngine
+from hydro_app.engines.hydrology_engine import HydrologyEngine
 from hydro_app.rainfall import atlas14_storm_from_csv, atlas14_storms_from_csv
 from hydro_app.reports.excel_report import write_excel_report
 from hydro_app.schema import HydrologyModel, Storm
@@ -72,7 +72,7 @@ def run(args: argparse.Namespace) -> int:
 
         model.storms = [*model.storms, *storms]
     validation = validate_model(model)
-    results = PyfloEngine().run_model(model)
+    results = HydrologyEngine().run_model(model)
 
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)

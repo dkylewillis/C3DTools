@@ -117,6 +117,9 @@ def validate_hydrographs(model: HydrologyModel, report: ValidationReport) -> Non
         if hydrograph_type in SINGLE_INFLOW_HYDROGRAPH_TYPES and len(hydrograph.inflow_ids) != 1:
             report.errors.append(f"Hydrograph {hydrograph.id} type {hydrograph.type} requires exactly one inflow hydrograph.")
 
+        if hydrograph_type == "RESERVOIR":
+            validate_reservoir_parameters(hydrograph, report)
+
     for hydrograph_id in sorted(duplicate_ids):
         report.errors.append(f"Hydrograph id {hydrograph_id} appears more than once.")
 
@@ -124,3 +127,51 @@ def validate_hydrographs(model: HydrologyModel, report: ValidationReport) -> Non
         for inflow_id in hydrograph.inflow_ids:
             if inflow_id not in hydrograph_ids:
                 report.errors.append(f"Hydrograph {hydrograph.id} references missing inflow hydrograph {inflow_id}.")
+
+
+def validate_reservoir_parameters(hydrograph, report: ValidationReport) -> None:
+    stage_storage = []
+    for row in hydrograph.parameters.get("stage_storage", []):
+        if not isinstance(row, dict):
+            continue
+        elevation = _optional_float(row.get("elevation"))
+        storage = _optional_float(row.get("volume") or row.get("storage") or row.get("storage_cuft"))
+        if elevation is not None and storage is not None:
+            stage_storage.append((elevation, storage))
+
+    stage_storage.sort(key=lambda item: item[0])
+    if len(stage_storage) < 2:
+        report.errors.append(f"Hydrograph {hydrograph.id} type Reservoir requires at least two stage-storage rows.")
+        return
+
+    for left, right in zip(stage_storage, stage_storage[1:]):
+        if right[0] <= left[0] or right[1] < left[1]:
+            report.errors.append(f"Hydrograph {hydrograph.id} type Reservoir has non-monotonic stage-storage rows.")
+            return
+
+    if not _has_active_outlet(hydrograph.parameters):
+        report.warnings.append(f"Hydrograph {hydrograph.id} type Reservoir has no active outlet rows.")
+
+
+def _has_active_outlet(parameters: dict) -> bool:
+    for key in ("weirs", "culverts_orifices"):
+        rows = parameters.get(key, [])
+        if not isinstance(rows, list):
+            continue
+        for row in rows:
+            if isinstance(row, dict) and str(row.get("label", "")).strip().lower() == "active":
+                if any(str(row.get(column, "")).strip().lower() in {"yes", "y", "true", "1"} for column in ("a", "b", "c", "d", "riser")):
+                    return True
+    return False
+
+
+def _optional_float(value) -> float | None:
+    if value is None:
+        return None
+    text = str(value).strip().replace(",", "")
+    if not text or text.lower() in {"n/a", "na", "----", "---"}:
+        return None
+    try:
+        return float(text)
+    except ValueError:
+        return None

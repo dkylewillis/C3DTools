@@ -601,12 +601,23 @@ namespace C3DTools.ViewModels
             if (doc == null)
                 return;
 
-            HydrographRows.Clear();
-            var savedRows = _hydrographService.GetHydrographs(doc.Database);
+            List<HydrologyHydrograph> savedRows;
+            try
+            {
+                using (doc.LockDocument())
+                    savedRows = _hydrographService.GetHydrographs(doc.Database);
+            }
+            catch (System.Exception ex)
+            {
+                ResultsStatus = $"Could not load saved hydrograph/pond rows: {ex.Message}";
+                return;
+            }
+
             var rows = savedRows.Count > 0
                 ? savedRows.Select(HydrographRowItem.FromModel)
                 : GenerateDefaultHydrographRows();
 
+            HydrographRows.Clear();
             foreach (var row in rows)
                 AddHydrographRowItem(row);
 
@@ -960,12 +971,41 @@ namespace C3DTools.ViewModels
             if (doc == null)
                 return;
 
-            var rows = HydrographRows
-                .Where(row => !string.IsNullOrWhiteSpace(row.Id))
-                .Select(row => row.ToModel())
-                .ToList();
-            _hydrographService.SaveHydrographs(doc.Database, rows);
-            doc.Editor.WriteMessage($"\nSaved {rows.Count} hydrograph row(s) to the drawing.");
+            TrySaveHydrographRows(doc);
+        }
+
+        private bool TrySaveHydrographRows(Document doc)
+        {
+            try
+            {
+                var rows = HydrographRows
+                    .Where(row => !string.IsNullOrWhiteSpace(row.Id))
+                    .Select(row => row.ToModel())
+                    .ToList();
+
+                using (doc.LockDocument())
+                    _hydrographService.SaveHydrographs(doc.Database, rows);
+
+                List<HydrologyHydrograph> savedRows;
+                using (doc.LockDocument())
+                    savedRows = _hydrographService.GetHydrographs(doc.Database);
+
+                var missingSavedIds = rows
+                    .Select(row => row.Id)
+                    .Where(id => !savedRows.Any(savedRow => savedRow.Id.Equals(id, System.StringComparison.OrdinalIgnoreCase)))
+                    .ToList();
+                if (missingSavedIds.Count > 0)
+                    throw new InvalidOperationException($"Saved rows could not be read back: {string.Join(", ", missingSavedIds)}");
+
+                int pondCount = savedRows.Count(row => row.Type.Equals("Reservoir", System.StringComparison.OrdinalIgnoreCase));
+                doc.Editor.WriteMessage($"\nSaved {savedRows.Count} hydrograph row(s), including {pondCount} pond row(s), to the drawing.");
+                return true;
+            }
+            catch (System.Exception ex)
+            {
+                doc.Editor.WriteMessage($"\nHydrograph rows were not saved: {ex.Message}");
+                return false;
+            }
         }
 
         private void ExecuteAddPondRow()
@@ -1212,7 +1252,13 @@ namespace C3DTools.ViewModels
         private void ExecuteRunHydroModel()
         {
             var doc = Application.DocumentManager.MdiActiveDocument;
-            doc?.SendStringToExecute("RUN_HYDRO_MODEL\n", true, false, false);
+            if (doc == null)
+                return;
+
+            if (!TrySaveHydrographRows(doc))
+                return;
+
+            doc.SendStringToExecute("RUN_HYDRO_MODEL\n", true, false, false);
         }
 
         private void ExecuteGetBasin()
@@ -1273,12 +1319,17 @@ namespace C3DTools.ViewModels
                 var hydrographsById = results.Hydrographs
                     .Where(row => !string.IsNullOrWhiteSpace(row.Id))
                     .ToDictionary(row => row.Id, System.StringComparer.OrdinalIgnoreCase);
+                var savedRowsById = HydrographRows
+                    .Where(row => !string.IsNullOrWhiteSpace(row.Id))
+                    .GroupBy(row => row.Id.Trim(), System.StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(group => group.Key, group => group.First(), System.StringComparer.OrdinalIgnoreCase);
                 var peakFlowGroupsById = results.HydrographPeakFlows
                     .Where(row => !string.IsNullOrWhiteSpace(row.HydrographId))
                     .GroupBy(row => row.HydrographId, System.StringComparer.OrdinalIgnoreCase)
                     .ToDictionary(group => group.Key, group => group.ToList(), System.StringComparer.OrdinalIgnoreCase);
                 var hydrographIds = hydrographsById.Keys
                     .Concat(peakFlowGroupsById.Keys)
+                    .Concat(savedRowsById.Keys)
                     .Distinct(System.StringComparer.OrdinalIgnoreCase);
 
                 foreach (string hydrographId in hydrographIds
@@ -1286,6 +1337,7 @@ namespace C3DTools.ViewModels
                     .ThenBy(id => id, System.StringComparer.OrdinalIgnoreCase))
                 {
                     hydrographsById.TryGetValue(hydrographId, out HydrologyHydrographResult? hydrograph);
+                    savedRowsById.TryGetValue(hydrographId, out HydrographRowItem? savedRow);
                     peakFlowGroupsById.TryGetValue(hydrographId, out List<HydrologyHydrographPeakFlow>? peakFlowRows);
                     HydrologyHydrographPeakFlow? firstPeak = peakFlowRows?.FirstOrDefault();
                     var peaksByAri = (peakFlowRows ?? new List<HydrologyHydrographPeakFlow>())
@@ -1296,9 +1348,9 @@ namespace C3DTools.ViewModels
                     HydrographResultRows.Add(new HydrographResultRowItem
                     {
                         HydNo = hydrographId,
-                        Type = hydrograph?.Type ?? firstPeak?.HydrographType ?? string.Empty,
-                        InflowHyds = FormatInflows(hydrograph?.InflowIds?.Count > 0 == true ? hydrograph.InflowIds : firstPeak?.InflowIds),
-                        Description = hydrograph?.Description ?? string.Empty,
+                        Type = hydrograph?.Type ?? firstPeak?.HydrographType ?? savedRow?.Type ?? string.Empty,
+                        InflowHyds = FormatInflows(hydrograph?.InflowIds?.Count > 0 == true ? hydrograph.InflowIds : firstPeak?.InflowIds?.Count > 0 == true ? firstPeak.InflowIds : SplitHydrographIds(savedRow?.InflowIdsText ?? string.Empty)),
+                        Description = hydrograph?.Description ?? savedRow?.Description ?? string.Empty,
                         Q1 = FormatPeak(peaksByAri, 1),
                         Q2 = FormatPeak(peaksByAri, 2),
                         Q5 = FormatPeak(peaksByAri, 5),
@@ -1306,7 +1358,7 @@ namespace C3DTools.ViewModels
                         Q25 = FormatPeak(peaksByAri, 25),
                         Q50 = FormatPeak(peaksByAri, 50),
                         Q100 = FormatPeak(peaksByAri, 100),
-                        Status = string.IsNullOrWhiteSpace(firstPeak?.Status) ? hydrograph?.Status ?? string.Empty : firstPeak.Status
+                        Status = string.IsNullOrWhiteSpace(firstPeak?.Status) ? hydrograph?.Status ?? (savedRow == null ? string.Empty : "not_in_results") : firstPeak.Status
                     });
                 }
 
@@ -1946,8 +1998,9 @@ namespace C3DTools.ViewModels
                 new PondOutletTableRowItem("Length (ft)", string.Empty, string.Empty, string.Empty, string.Empty, riserLabel: "Height (ft)"),
                 new PondOutletTableRowItem("Slope (%)", string.Empty, string.Empty, string.Empty, "----", riserLabel: "---------"),
                 new PondOutletTableRowItem("N-Value", ".013", ".013", ".013", "----", riserLabel: "---------"),
+                new PondOutletTableRowItem("Entrance Type", string.Empty, string.Empty, string.Empty, "----", riserLabel: "---------"),
                 new PondOutletTableRowItem("Orifice Coeff.", ".60", ".60", ".60", ".60"),
-                new PondOutletTableRowItem("Multi-Stage", "No", "No", "No", "No"),
+                new PondOutletTableRowItem("Multi-Stage", "n/a", "No", "No", "No", aUsesNotApplicableOptions: true),
                 new PondOutletTableRowItem("Active", "Yes", "Yes", "Yes", "Yes")
             };
         }
@@ -1959,7 +2012,7 @@ namespace C3DTools.ViewModels
                 new PondOutletTableRowItem("Weir Type", "Choose...", "Choose...", "Choose...", d: "Choose..."),
                 new PondOutletTableRowItem("Crest Elev (ft)", string.Empty, string.Empty, string.Empty, d: string.Empty),
                 new PondOutletTableRowItem("Crest Length (ft)", string.Empty, string.Empty, string.Empty, d: string.Empty),
-                new PondOutletTableRowItem("Weir Coeff.", "3.33", "3.33", "3.33", d: "3.33"),
+                new PondOutletTableRowItem("Weir Coeff.", "3.30", "3.30", "3.30", d: "3.30"),
                 new PondOutletTableRowItem("Multi-Stage", "No", "No", "No", d: "No"),
                 new PondOutletTableRowItem("Active", "Yes", "Yes", "Yes", d: "Yes")
             };
@@ -1977,7 +2030,9 @@ namespace C3DTools.ViewModels
                 if (targetRow == null)
                     continue;
 
-                targetRow.A = ReadOutletCell(rowElement, "a", targetRow.A);
+                targetRow.A = key.Equals("culverts_orifices", System.StringComparison.OrdinalIgnoreCase) && targetRow.IsMultiStageRow
+                    ? "n/a"
+                    : ReadOutletCell(rowElement, "a", targetRow.A);
                 targetRow.B = ReadOutletCell(rowElement, "b", targetRow.B);
                 targetRow.C = ReadOutletCell(rowElement, "c", targetRow.C);
                 targetRow.Riser = ReadOutletCell(rowElement, "riser", targetRow.Riser);
@@ -2040,7 +2095,7 @@ namespace C3DTools.ViewModels
             if (weirType.Equals("Riser", System.StringComparison.OrdinalIgnoreCase) ||
                 weirType.Equals("Rectangular", System.StringComparison.OrdinalIgnoreCase) ||
                 weirType.Equals("Cipoletti", System.StringComparison.OrdinalIgnoreCase))
-                return "3.330";
+                return "3.300";
 
             if (weirType.Equals("Broad Crested", System.StringComparison.OrdinalIgnoreCase) ||
                 weirType.Equals("Broad crested", System.StringComparison.OrdinalIgnoreCase))
@@ -2106,16 +2161,19 @@ namespace C3DTools.ViewModels
     {
         private static readonly ObservableCollection<string> WeirTypeOptionsWithRiser = new ObservableCollection<string>(BuildWeirTypeOptions(includeRiser: true));
         private static readonly ObservableCollection<string> WeirTypeOptionsWithoutRiser = new ObservableCollection<string>(BuildWeirTypeOptions(includeRiser: false));
+        private static readonly ObservableCollection<string> YesNoOptions = new ObservableCollection<string> { "Yes", "No" };
+        private static readonly ObservableCollection<string> NotApplicableOptions = new ObservableCollection<string> { "n/a" };
         private string _a;
         private string _b;
         private string _c;
         private string _riser;
         private string _d;
 
-        public PondOutletTableRowItem(string label, string a = "", string b = "", string c = "", string riser = "", string d = "", string? riserLabel = null)
+        public PondOutletTableRowItem(string label, string a = "", string b = "", string c = "", string riser = "", string d = "", string? riserLabel = null, bool aUsesNotApplicableOptions = false)
         {
             Label = label;
             RiserLabel = riserLabel ?? label;
+            AChoiceOptions = aUsesNotApplicableOptions ? NotApplicableOptions : YesNoOptions;
             _a = a;
             _b = b;
             _c = c;
@@ -2126,8 +2184,12 @@ namespace C3DTools.ViewModels
         public string Label { get; }
         public string RiserLabel { get; }
         public bool IsWeirTypeRow => Label.Equals("Weir Type", System.StringComparison.OrdinalIgnoreCase);
+        public bool IsMultiStageRow => Label.Equals("Multi-Stage", System.StringComparison.OrdinalIgnoreCase);
+        public bool IsYesNoRow => IsMultiStageRow || Label.Equals("Active", System.StringComparison.OrdinalIgnoreCase);
         public ObservableCollection<string> AWeirTypeOptions => WeirTypeOptionsWithRiser;
         public ObservableCollection<string> WeirTypeOptions => WeirTypeOptionsWithoutRiser;
+        public ObservableCollection<string> AChoiceOptions { get; }
+        public ObservableCollection<string> YesNoChoiceOptions => YesNoOptions;
 
         public string A
         {

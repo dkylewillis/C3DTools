@@ -121,7 +121,8 @@ namespace C3DTools.Services
                 .ThenBy(b => b.Handle, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            model.Hydrographs = new HydrologyHydrographService().GetHydrographs(db);
+            using (DocumentLock docLock = doc.LockDocument())
+                model.Hydrographs = new HydrologyHydrographService().GetHydrographs(db);
 
             return model;
         }

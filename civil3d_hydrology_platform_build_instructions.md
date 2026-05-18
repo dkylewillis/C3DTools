@@ -21,7 +21,7 @@ basin_model.json
     ↓
 Python hydrology engine
     ↓
-pyflo backend calculations
+local NRCS/SCS calculations
     ↓
 results.json + Excel reports
     ↓
@@ -89,7 +89,7 @@ Python owns:
 - validation
 - curve number calculations
 - Tc calculations
-- pyflo integration
+- local NRCS/SCS hydrograph generation
 - hydrograph generation
 - reports
 - result generation
@@ -140,7 +140,7 @@ C3DTools/
 │   │   ├── cli.py
 │   │   │
 │   │   ├── engines/
-│   │   │   └── pyflo_engine.py
+│   │   │   └── hydrology_engine.py
 │   │   │
 │   │   └── reports/
 │   │       └── excel_report.py
@@ -331,16 +331,16 @@ Initially allow manual storm input.
 
 ---
 
-## engines/pyflo_engine.py
+## engines/hydrology_engine.py
 
-Wrapper around pyflo.
+Wrapper around C3DTools hydrology calculations.
 
-DO NOT expose pyflo directly to the application.
+DO NOT expose third-party hydrology packages directly to the application.
 
 Required structure:
 
 ```python
-class PyfloEngine:
+class HydrologyEngine:
     def run_basin(self, basin, storm):
         pass
 
@@ -536,7 +536,7 @@ Excel report generation
 Build:
 
 ```text
-pyflo integration
+local NRCS/SCS hydrograph generation
 ```
 
 ---

@@ -5,7 +5,7 @@ from hydro_app.schema import Basin, HydrologyModel, Storm
 from hydro_app.validators import validate_model
 
 
-class PyfloEngine:
+class HydrologyEngine:
     def run_basin(self, basin: Basin, storm: Storm | None = None) -> dict:
         model = HydrologyModel(basins=[basin], storms=[storm] if storm else [])
         validation = validate_model(model)

@@ -1,6 +1,7 @@
 using Autodesk.AutoCAD.DatabaseServices;
 using C3DTools.Models;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 
 namespace C3DTools.Services
@@ -42,9 +43,12 @@ namespace C3DTools.Services
 
                 DBDictionary maskDict = (DBDictionary)tr.GetObject(nod.GetAt(NodKey), OpenMode.ForRead);
 
-                foreach (DBDictionaryEntry entry in maskDict)
+                foreach (DictionaryEntry entry in maskDict)
                 {
-                    Xrecord xrec = (Xrecord)tr.GetObject(entry.Value, OpenMode.ForRead);
+                    if (entry.Value is not ObjectId objectId)
+                        continue;
+
+                    Xrecord xrec = (Xrecord)tr.GetObject(objectId, OpenMode.ForRead);
                     MaskDefinition? mask = ReadXrecord(xrec);
                     if (mask != null)
                         results.Add(mask);

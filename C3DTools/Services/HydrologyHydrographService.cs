@@ -1,6 +1,7 @@
 using Autodesk.AutoCAD.DatabaseServices;
 using C3DTools.Models;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -20,29 +21,28 @@ namespace C3DTools.Services
         {
             var rows = new List<HydrologyHydrograph>();
 
-            try
+            using Transaction tr = db.TransactionManager.StartTransaction();
+            DBDictionary nod = (DBDictionary)tr.GetObject(db.NamedObjectsDictionaryId, OpenMode.ForRead);
+
+            if (!nod.Contains(NodKey))
             {
-                using Transaction tr = db.TransactionManager.StartTransaction();
-                DBDictionary nod = (DBDictionary)tr.GetObject(db.NamedObjectsDictionaryId, OpenMode.ForRead);
-
-                if (!nod.Contains(NodKey))
-                {
-                    tr.Commit();
-                    return rows;
-                }
-
-                DBDictionary hydrographDict = (DBDictionary)tr.GetObject(nod.GetAt(NodKey), OpenMode.ForRead);
-                foreach (DBDictionaryEntry entry in hydrographDict)
-                {
-                    Xrecord xrec = (Xrecord)tr.GetObject(entry.Value, OpenMode.ForRead);
-                    HydrologyHydrograph? row = ReadXrecord(xrec);
-                    if (row != null)
-                        rows.Add(row);
-                }
-
                 tr.Commit();
+                return rows;
             }
-            catch { }
+
+            DBDictionary hydrographDict = (DBDictionary)tr.GetObject(nod.GetAt(NodKey), OpenMode.ForRead);
+            foreach (DictionaryEntry entry in hydrographDict)
+            {
+                if (entry.Value is not ObjectId objectId)
+                    continue;
+
+                Xrecord xrec = (Xrecord)tr.GetObject(objectId, OpenMode.ForRead);
+                HydrologyHydrograph? row = ReadXrecord(xrec);
+                if (row != null)
+                    rows.Add(row);
+            }
+
+            tr.Commit();
 
             return rows
                 .OrderBy(row => ParseHydrographNumber(row.Id))
@@ -52,40 +52,41 @@ namespace C3DTools.Services
 
         public void SaveHydrographs(Database db, IEnumerable<HydrologyHydrograph> hydrographs)
         {
-            try
+            using Transaction tr = db.TransactionManager.StartTransaction();
+            DBDictionary nod = (DBDictionary)tr.GetObject(db.NamedObjectsDictionaryId, OpenMode.ForWrite);
+
+            DBDictionary hydrographDict;
+            if (nod.Contains(NodKey))
             {
-                using Transaction tr = db.TransactionManager.StartTransaction();
-                DBDictionary nod = (DBDictionary)tr.GetObject(db.NamedObjectsDictionaryId, OpenMode.ForWrite);
-
-                DBDictionary hydrographDict;
-                if (nod.Contains(NodKey))
+                hydrographDict = (DBDictionary)tr.GetObject(nod.GetAt(NodKey), OpenMode.ForWrite);
+                var existingKeys = hydrographDict
+                    .Cast<DictionaryEntry>()
+                    .Select(entry => entry.Key?.ToString())
+                    .Where(key => !string.IsNullOrWhiteSpace(key))
+                    .Select(key => key!)
+                    .ToList();
+                foreach (string key in existingKeys)
                 {
-                    hydrographDict = (DBDictionary)tr.GetObject(nod.GetAt(NodKey), OpenMode.ForWrite);
-                    var existingKeys = hydrographDict.Cast<DBDictionaryEntry>().Select(entry => entry.Key).ToList();
-                    foreach (string key in existingKeys)
-                    {
-                        DBObject obj = tr.GetObject(hydrographDict.GetAt(key), OpenMode.ForWrite);
-                        obj.Erase();
-                        hydrographDict.Remove(key);
-                    }
+                    DBObject obj = tr.GetObject(hydrographDict.GetAt(key), OpenMode.ForWrite);
+                    obj.Erase();
+                    hydrographDict.Remove(key);
                 }
-                else
-                {
-                    hydrographDict = new DBDictionary();
-                    nod.SetAt(NodKey, hydrographDict);
-                    tr.AddNewlyCreatedDBObject(hydrographDict, true);
-                }
-
-                foreach (HydrologyHydrograph row in hydrographs.Where(row => !string.IsNullOrWhiteSpace(row.Id)))
-                {
-                    Xrecord xrec = new Xrecord { Data = BuildResultBuffer(row) };
-                    hydrographDict.SetAt(row.Id, xrec);
-                    tr.AddNewlyCreatedDBObject(xrec, true);
-                }
-
-                tr.Commit();
             }
-            catch { }
+            else
+            {
+                hydrographDict = new DBDictionary();
+                nod.SetAt(NodKey, hydrographDict);
+                tr.AddNewlyCreatedDBObject(hydrographDict, true);
+            }
+
+            foreach (HydrologyHydrograph row in hydrographs.Where(row => !string.IsNullOrWhiteSpace(row.Id)))
+            {
+                Xrecord xrec = new Xrecord { Data = BuildResultBuffer(row) };
+                hydrographDict.SetAt(row.Id, xrec);
+                tr.AddNewlyCreatedDBObject(xrec, true);
+            }
+
+            tr.Commit();
         }
 
         private static HydrologyHydrograph? ReadXrecord(Xrecord xrec)

@@ -1,9 +1,10 @@
 from pathlib import Path
+import math
 
 import pytest
 
 from hydro_app.curve_number import composite_curve_number
-from hydro_app.hydrograph import design_storm_cumulative_rainfall, generate_basin_hydrograph, hydrograph_volume_cuft, scs_runoff_depth_inches
+from hydro_app.hydrograph import OutletRatingPoint, StageStoragePoint, design_storm_cumulative_rainfall, generate_basin_hydrograph, hydrograph_volume_cuft, scs_peak_time_minutes, scs_runoff_depth_inches, scs_unit_hydrograph, _build_outlet_rating_curve, _outlet_discharge_cfs, _route_storage_indication, _standard_orifice_column_discharge, _table_by_label
 from hydro_app.network import find_invalid_downstream_references, find_routing_cycles
 from hydro_app.rainfall import atlas14_storm_from_csv, atlas14_storms_from_csv, parse_atlas14_depth_csv
 from hydro_app.results import build_results
@@ -113,7 +114,7 @@ def test_results_include_peak_flow_rows_for_each_storm_and_basin():
     assert results["active_storm_id"] == "atlas14-100yr-24-hr"
 
 
-def test_results_include_pyflo_hydrographs_and_routed_peaks():
+def test_results_include_scs_hydrographs_and_routed_peaks():
     model = HydrologyModel.from_dict(
         {
             "storms": [
@@ -182,6 +183,25 @@ def test_scs_hydrograph_defaults_to_two_minute_time_step():
     series = generate_basin_hydrograph(basin, storm)
 
     assert series[1][0] - series[0][0] == pytest.approx(2.0)
+
+
+def test_scs_unit_hydrograph_uses_hydraflow_peak_time_equation():
+    assert scs_peak_time_minutes(20.0, 5.0) == pytest.approx((20.0 + 5.0) / 1.7)
+
+
+def test_scs_unit_hydrograph_uses_hydraflow_peak_flow_and_time_base():
+    area_acres = 40.0
+    tc_minutes = 37.5
+    interval_minutes = 5.0
+
+    unit_hydrograph = scs_unit_hydrograph(area_acres, tc_minutes, interval_minutes)
+    peak_time = (tc_minutes + interval_minutes) / 1.7
+    peak_flow = 484.0 * (area_acres / 640.0) / (peak_time / 60.0)
+    time_base = 2.67 * peak_time
+
+    assert max(flow for _, flow in unit_hydrograph) == pytest.approx(peak_flow)
+    assert unit_hydrograph[-1][0] >= time_base
+    assert unit_hydrograph[-1][0] < time_base + interval_minutes
 
 
 def test_atlas14_alternating_block_remains_selectable_distribution():
@@ -295,6 +315,349 @@ def test_explicit_combine_hydrograph_rows_create_study_point_output():
     assert combine["peak_flow_cfs"] >= max(h1["peak_flow_cfs"], h2["peak_flow_cfs"])
     assert combine["volume_cuft"] > h1["volume_cuft"]
     assert len(results["hydrograph_peak_flows"]) == 3
+
+
+def test_reservoir_hydrograph_routes_inflow_through_stage_storage_and_weir():
+    model = HydrologyModel.from_dict(
+        {
+            "storms": [
+                {
+                    "id": "design-10yr",
+                    "rainfall_depth_inches": 4.0,
+                    "duration_minutes": 60,
+                    "time_step_minutes": 5,
+                    "duration_depths_inches": {"5-min": 0.4, "60-min": 4.0},
+                }
+            ],
+            "basins": [
+                {"id": "B-1", "name": "Basin 1", "area_acres": 2.0, "curve_number": 82, "tc_minutes": 12},
+            ],
+            "hydrographs": [
+                {"id": "H1", "type": "SCS", "basin_id": "B-1", "description": "Basin 1"},
+                {
+                    "id": "H2",
+                    "type": "Reservoir",
+                    "description": "Pond 1",
+                    "inflow_ids": ["H1"],
+                    "parameters": {
+                        "stage_storage": [
+                            {"elevation": "0", "volume": "0"},
+                            {"elevation": "1", "volume": "5000"},
+                            {"elevation": "2", "volume": "10000"},
+                            {"elevation": "3", "volume": "20000"},
+                            {"elevation": "4", "volume": "35000"},
+                        ],
+                        "weirs": [
+                            {"label": "Weir Type", "a": "Rectangular"},
+                            {"label": "Crest Elev (ft)", "a": "0.5"},
+                            {"label": "Crest Length (ft)", "a": "2.0"},
+                            {"label": "Weir Coeff.", "a": "3.33"},
+                            {"label": "Active", "a": "Yes"},
+                        ],
+                    },
+                },
+            ],
+        }
+    )
+
+    results = build_results(model, validate_model(model))
+    inflow = next(hydrograph for hydrograph in results["hydrographs"] if hydrograph["id"] == "H1")
+    reservoir = next(hydrograph for hydrograph in results["hydrographs"] if hydrograph["id"] == "H2")
+
+    assert reservoir["status"] == "ok"
+    assert reservoir["peak_flow_cfs"] < inflow["peak_flow_cfs"]
+    assert reservoir["time_to_peak_minutes"] >= inflow["time_to_peak_minutes"]
+    assert reservoir["maximum_elevation_ft"] > 1.0
+    assert reservoir["maximum_storage_cuft"] > 0
+    assert len(results["hydrograph_peak_flows"]) == 2
+
+
+def test_reservoir_v_notch_weir_uses_angle_based_discharge():
+    model = HydrologyModel.from_dict(
+        {
+            "storms": [
+                {
+                    "id": "design-10yr",
+                    "rainfall_depth_inches": 3.5,
+                    "duration_minutes": 60,
+                    "time_step_minutes": 5,
+                    "duration_depths_inches": {"5-min": 0.3, "60-min": 3.5},
+                }
+            ],
+            "basins": [
+                {"id": "B-1", "name": "Basin 1", "area_acres": 1.5, "curve_number": 80, "tc_minutes": 10},
+            ],
+            "hydrographs": [
+                {"id": "H1", "type": "SCS", "basin_id": "B-1"},
+                {
+                    "id": "H2",
+                    "type": "Reservoir",
+                    "inflow_ids": ["H1"],
+                    "parameters": {
+                        "stage_storage": [
+                            {"elevation": "0", "volume": "0"},
+                            {"elevation": "1", "volume": "5000"},
+                            {"elevation": "2", "volume": "10000"},
+                            {"elevation": "3", "volume": "20000"},
+                        ],
+                        "weirs": [
+                            {"label": "Weir Type", "a": "90-deg V-notch"},
+                            {"label": "Crest Elev (ft)", "a": "0.3"},
+                            {"label": "Crest Length (ft)", "a": "n/a"},
+                            {"label": "Weir Coeff.", "a": "2.540"},
+                            {"label": "Active", "a": "Yes"},
+                        ],
+                    },
+                },
+            ],
+        }
+    )
+
+    results = build_results(model, validate_model(model))
+    reservoir = next(hydrograph for hydrograph in results["hydrographs"] if hydrograph["id"] == "H2")
+
+    assert reservoir["status"] == "ok"
+    assert reservoir["peak_flow_cfs"] > 0
+    assert reservoir["maximum_elevation_ft"] > 0.3
+
+
+def test_broad_crested_weir_blank_coefficient_uses_hydraflow_default():
+    parameters = {
+        "weirs": [
+            {"label": "Weir Type", "a": "Broad Crested"},
+            {"label": "Crest Elev (ft)", "a": "0"},
+            {"label": "Crest Length (ft)", "a": "10"},
+            {"label": "Weir Coeff.", "a": ""},
+            {"label": "Active", "a": "Yes"},
+        ],
+        "culverts_orifices": [],
+    }
+
+    discharge = _outlet_discharge_cfs(1.0, parameters, [])
+
+    assert discharge == pytest.approx(26.0)
+
+
+def test_broad_crested_weir_uses_brater_king_table_when_breadth_is_available():
+    parameters = {
+        "weirs": [
+            {"label": "Weir Type", "a": "Broad Crested"},
+            {"label": "Crest Elev (ft)", "a": "0"},
+            {"label": "Crest Length (ft)", "a": "10"},
+            {"label": "Breadth of Crest (ft)", "a": "1"},
+            {"label": "Weir Coeff.", "a": ""},
+            {"label": "Active", "a": "Yes"},
+        ],
+        "culverts_orifices": [],
+    }
+
+    discharge = _outlet_discharge_cfs(4.0, parameters, [])
+
+    assert discharge == pytest.approx(3.32 * 10.0 * (4.0 ** 1.5))
+
+
+def test_rectangular_weir_blank_coefficient_uses_hydraflow_default():
+    parameters = {
+        "weirs": [
+            {"label": "Weir Type", "a": "Rectangular"},
+            {"label": "Crest Elev (ft)", "a": "0"},
+            {"label": "Crest Length (ft)", "a": "10"},
+            {"label": "Weir Coeff.", "a": ""},
+            {"label": "Active", "a": "Yes"},
+        ],
+        "culverts_orifices": [],
+    }
+
+    discharge = _outlet_discharge_cfs(1.0, parameters, [])
+
+    assert discharge == pytest.approx(33.0)
+
+
+def test_culvert_outlet_control_uses_downstream_water_surface_head():
+    rows = {
+        "rise (in)": {"a": "24"},
+        "span (in)": {"a": "24"},
+        "no. barrels": {"a": "1"},
+        "invert elev. (ft)": {"a": "100"},
+        "length (ft)": {"a": "100"},
+        "slope (%)": {"a": "0"},
+        "n-value": {"a": ".013"},
+        "orifice coeff.": {"a": "1.00"},
+    }
+
+    discharge = _standard_orifice_column_discharge(102.0, 0.0, rows, "a", [])
+
+    area = math.pi
+    radius = 0.5
+    k = 1.5 + ((29.0 * (0.013 ** 2.0) * 100.0) / (radius ** 1.33))
+    expected_outlet_control = area * math.sqrt((2.0 * 32.174 * 2.0) / k)
+    assert discharge == pytest.approx(expected_outlet_control)
+
+
+def test_concrete_pipe_beveled_lip_entrance_uses_brater_king_table():
+    rows = {
+        "rise (in)": {"a": "24"},
+        "span (in)": {"a": "24"},
+        "no. barrels": {"a": "1"},
+        "invert elev. (ft)": {"a": "100"},
+        "length (ft)": {"a": "100"},
+        "slope (%)": {"a": "0"},
+        "n-value": {"a": ".013"},
+        "orifice coeff.": {"a": "1.00"},
+        "entrance type": {"a": "Beveled-Lip"},
+    }
+
+    discharge = _standard_orifice_column_discharge(102.0, 0.0, rows, "a", [])
+
+    area = math.pi
+    expected_outlet_control = 0.67 * area * math.sqrt(2.0 * 32.174 * 2.0)
+    assert discharge == pytest.approx(expected_outlet_control)
+
+
+def test_concrete_pipe_square_cornered_entrance_uses_brater_king_table():
+    rows = {
+        "rise (in)": {"a": "24"},
+        "span (in)": {"a": "24"},
+        "no. barrels": {"a": "1"},
+        "invert elev. (ft)": {"a": "100"},
+        "length (ft)": {"a": "100"},
+        "slope (%)": {"a": "0"},
+        "n-value": {"a": ".013"},
+        "orifice coeff.": {"a": "1.00"},
+        "entrance type": {"a": "Square Cornered"},
+    }
+
+    discharge = _standard_orifice_column_discharge(102.0, 0.0, rows, "a", [])
+
+    area = math.pi
+    expected_outlet_control = 0.62 * area * math.sqrt(2.0 * 32.174 * 2.0)
+    assert discharge == pytest.approx(expected_outlet_control)
+
+
+def test_rating_curve_adds_intermediate_stages_for_three_inch_bottom_orifice():
+    parameters = {
+        "culverts_orifices": [
+            {"label": "Rise (in)", "a": "3"},
+            {"label": "Span (in)", "a": "3"},
+            {"label": "No. Barrels", "a": "1"},
+            {"label": "Invert Elev. (ft)", "a": "0"},
+            {"label": "Length (ft)", "a": "0"},
+            {"label": "Slope (%)", "a": "0"},
+            {"label": "N-Value", "a": ".013"},
+            {"label": "Orifice Coeff.", "a": ".60"},
+            {"label": "Multi-Stage", "a": "n/a"},
+            {"label": "Active", "a": "Yes"},
+        ],
+        "weirs": [],
+    }
+
+    rating = _build_outlet_rating_curve(
+        [StageStoragePoint(0.0, 0.0), StageStoragePoint(1.0, 10000.0)],
+        parameters,
+        [],
+    )
+
+    assert len(rating) == 11
+    assert rating[1].elevation_ft == pytest.approx(0.1)
+    assert rating[1].discharge_cfs < rating[-1].discharge_cfs * 0.2
+
+
+def test_storage_indication_routing_matches_hydraflow_reference_table():
+    dt_seconds = 240.0
+    times = list(range(0, 73, 4))
+    inflows = [0, 24, 95, 206, 345, 500, 655, 794, 905, 976, 1000, 976, 905, 848, 736, 638, 554, 480, 417]
+    reference_indications = [0, 24, 123, 334, 725, 1284, 2039, 2958, 3991, 5120, 6286, 7402, 8383, 9206, 9836, 10240, 10452, 10502, 10411]
+    reference_outflows = [0, 10, 45, 80, 143, 200, 265, 333, 376, 404, 430, 450, 465, 477, 485, 490, 492, 494, 491]
+    rating = [
+        OutletRatingPoint(
+            elevation_ft=float(index),
+            storage_cuft=((indication - outflow) * dt_seconds / 2.0),
+            discharge_cfs=float(outflow),
+        )
+        for index, (indication, outflow) in enumerate(zip(reference_indications, reference_outflows))
+    ]
+
+    routed, _, _, statuses = _route_storage_indication(list(zip(times, inflows)), rating)
+
+    assert statuses == []
+    assert [round(flow) for _, flow in routed] == [0, *reference_outflows[1:]]
+
+
+def test_multi_stage_orifice_routes_through_culvert_a_capacity():
+    parameters = {
+        "tailwater_elevation": "0",
+        "culverts_orifices": [
+            {"label": "Rise (in)", "a": "12", "b": "24"},
+            {"label": "Span (in)", "a": "12", "b": "24"},
+            {"label": "No. Barrels", "a": "1", "b": "1"},
+            {"label": "Invert Elev. (ft)", "a": "0", "b": "0.5"},
+            {"label": "Length (ft)", "a": "100", "b": "0"},
+            {"label": "Slope (%)", "a": "0", "b": "0"},
+            {"label": "N-Value", "a": ".013", "b": ".013"},
+            {"label": "Orifice Coeff.", "a": ".60", "b": ".60"},
+            {"label": "Multi-Stage", "a": "n/a", "b": "Yes"},
+            {"label": "Active", "a": "Yes", "b": "Yes"},
+        ],
+        "weirs": [],
+    }
+    rows = _table_by_label(parameters["culverts_orifices"])
+
+    multi_stage_q = _outlet_discharge_cfs(3.0, parameters, [])
+    direct_b_q = _standard_orifice_column_discharge(3.0, 0.0, rows, "b", [])
+    culvert_a_full_capacity = _standard_orifice_column_discharge(3.0, 0.0, rows, "a", [])
+
+    assert multi_stage_q < direct_b_q
+    assert multi_stage_q <= culvert_a_full_capacity
+    assert multi_stage_q > 0
+
+
+def test_reservoir_with_invalid_stage_storage_returns_status_without_crashing():
+    model = HydrologyModel.from_dict(
+        {
+            "storms": [
+                {"id": "design-10yr", "rainfall_depth_inches": 3.0, "duration_minutes": 60, "time_step_minutes": 5}
+            ],
+            "basins": [
+                {"id": "B-1", "name": "Basin 1", "area_acres": 1.0, "curve_number": 80, "tc_minutes": 10},
+            ],
+            "hydrographs": [
+                {"id": "H1", "type": "SCS", "basin_id": "B-1"},
+                {
+                    "id": "H2",
+                    "type": "Reservoir",
+                    "inflow_ids": ["H1"],
+                    "parameters": {
+                        "stage_storage": [{"elevation": "0", "volume": "0"}],
+                        "weirs": [{"label": "Active", "a": "Yes"}],
+                    },
+                },
+            ],
+        }
+    )
+
+    results = build_results(model, validate_model(model))
+    reservoir = next(hydrograph for hydrograph in results["hydrographs"] if hydrograph["id"] == "H2")
+
+    assert reservoir["status"] == "invalid_stage_storage"
+    assert reservoir["peak_flow_cfs"] == 0
+
+
+def test_reservoir_validation_requires_stage_storage_rows():
+    model = HydrologyModel.from_dict(
+        {
+            "basins": [
+                {"id": "B-1", "name": "Basin 1", "area_acres": 1.0, "curve_number": 80, "tc_minutes": 10},
+            ],
+            "hydrographs": [
+                {"id": "H1", "type": "SCS", "basin_id": "B-1"},
+                {"id": "H2", "type": "Reservoir", "inflow_ids": ["H1"], "parameters": {"stage_storage": []}},
+            ],
+        }
+    )
+
+    report = validate_model(model)
+
+    assert "Hydrograph H2 type Reservoir requires at least two stage-storage rows." in report.errors
 
 
 def test_hydrograph_validation_enforces_inflow_cardinality_by_type():
